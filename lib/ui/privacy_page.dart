@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/app_info.dart';
 import '../core/theme.dart';
+import 'external_link.dart';
 import 'privacy_text.dart';
 import 'widgets.dart';
 
@@ -21,22 +22,57 @@ class PrivacyPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
                 child: Text(
-                  '${AppInfo.name} · last updated ${AppInfo.policyDate}',
-                  style: TextStyle(color: context.cs.onSurfaceVariant, fontSize: 12.5),
+                  '${AppInfo.name} - last updated ${AppInfo.policyDate}',
+                  style: TextStyle(
+                    color: context.cs.onSurfaceVariant,
+                    fontSize: 12.5,
+                  ),
                 ),
               ),
-              for (final sec in kPolicy)
+              for (final section in kPolicy)
                 GlassCard(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(sec.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                      Text(
+                        section.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15.5,
+                        ),
+                      ),
                       const SizedBox(height: 6),
-                      SelectableText(sec.body, style: const TextStyle(height: 1.45, fontSize: 14)),
+                      SelectableText(
+                        section.body,
+                        style: const TextStyle(height: 1.45, fontSize: 14),
+                      ),
+                      if (section.title == 'Contact')
+                        TextButton.icon(
+                          onPressed: () =>
+                              openExternalLink(context, AppInfo.playStoreUrl),
+                          icon: const Icon(Icons.open_in_new_rounded),
+                          label: const Text('Open Google Play listing'),
+                        ),
                     ],
                   ),
                 ),
+              TextButton.icon(
+                onPressed: () => openExternalLink(
+                  context,
+                  'https://policies.google.com/privacy',
+                ),
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text('Google Privacy Policy'),
+              ),
+              TextButton.icon(
+                onPressed: () => openExternalLink(
+                  context,
+                  'https://policies.google.com/technologies/partner-sites',
+                ),
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text('How Google uses partner information'),
+              ),
             ],
           ),
         ],

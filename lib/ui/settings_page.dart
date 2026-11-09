@@ -12,6 +12,8 @@ import '../state/app_state.dart';
 import 'categories_page.dart';
 import 'accounts_page.dart';
 import 'privacy_page.dart';
+import 'help_page.dart';
+import 'external_link.dart';
 import 'recurring_page.dart';
 import 'widgets.dart';
 
@@ -518,9 +520,23 @@ class _SettingsPageState extends State<SettingsPage> {
           ]),
           _section('About', [
             _tile(
+              Icons.help_outline_rounded,
+              'Help',
+              'Answers about entries, backups and data safety',
+              () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const HelpPage()),
+              ),
+            ),
+            _tile(
+              Icons.article_outlined,
+              'Terms of Use',
+              'Read the terms in your browser',
+              () => openExternalLink(context, AppInfo.termsUrl),
+            ),
+            _tile(
               Icons.privacy_tip_rounded,
               'Privacy policy',
-              'Your data never leaves your phone',
+              'How your data is stored and handled',
               () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const PrivacyPage()),

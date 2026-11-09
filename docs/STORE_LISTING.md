@@ -14,7 +14,7 @@ WHAT YOU GET
 • Month calendar with daily totals and spending heat-map
 • Week view with bar chart and "vs last week" comparison
 • Insights: highest day, daily average, no-spend days and a category breakdown
-• Fast add: big number pad, categories with icons, notes and any date
+• Fast add: decimal keyboard, categories with icons, notes, date and time
 • Monthly and daily budgets with a progress bar and over-budget warning
 • Search across all your notes, categories and amounts
 • Recurring entries: add rent, EMI, salary or subscriptions once and they record themselves
@@ -23,12 +23,12 @@ WHAT YOU GET
 • 20+ currencies, Indian (lakh/crore) or international number grouping
 
 YOUR DATA STAYS ON YOUR PHONE
-• No sign-up, no account, no cloud. Works fully offline
+• No sign-up or bank connection. Entries work offline; you control backups and sharing
 • Optional app lock with fingerprint, face or PIN
 • Back up to a file and restore it on a new phone (save it to Google Drive from the share sheet)
 • Export CSV for Excel or Google Sheets
 
-DayWise is free and supported by ads.
+DayWise is free. Ads are disabled in this release.
 
 Questions or ideas? Write to us from the contact email on this page.
 

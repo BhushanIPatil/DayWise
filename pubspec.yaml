@@ -2,7 +2,7 @@ name: daywise
 description: DayWise - an offline expense calendar. See what you spent every day, week and month.
 publish_to: 'none'
 # version: <name>+<build number>. Increase the build number (after +) for EVERY Play Store upload.
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
@@ -21,6 +21,7 @@ dependencies:
   local_auth: ^3.0.2
   google_mobile_ads: ^9.2.0
   package_info_plus: ^10.2.2
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:

@@ -15,8 +15,8 @@
 * Configure AdMob Privacy & messaging for EEA/UK/Switzerland and applicable US states.
   Test consent, refusal, and reopening Settings > Ad privacy choices with test devices:
   https://developers.google.com/admob/flutter/privacy
-* Before upload, replace developer/contact placeholders, host the matching privacy policy,
-  configure real AdMob IDs, create the upload signing key, complete Ads, Data safety,
+* Before upload, verify the Play Store support contact, host the matching privacy policy,
+  retain the existing Sanyuj upload signing key, and complete Ads, Data safety,
   target audience, content rating, financial features and developer verification in Play Console.
   Select the actual audience; excluding children must reflect the app's real audience.
 * Device checks: backup save/restore/share, biometric/PIN lock and cancellation, consent,
@@ -59,11 +59,13 @@ In `android/app/build.gradle.kts`:
   (the standard recipe: docs.flutter.dev/deployment/android#sign-the-app)
 * `MainActivity` must extend `FlutterFragmentActivity` (app lock) and `styles.xml` must use `Theme.AppCompat` parents.
 
-## 1. Fill in your details
-* `lib/core/app_info.dart`: `developer` and `contactEmail` (shown in the in-app privacy policy)
-* `docs/privacy_policy.html` and `docs/PRIVACY_POLICY.md`: replace `YOUR NAME` and `your-email@example.com`
-  (and the date if you change the policy). Keep them identical to the in-app text in `lib/ui/privacy_text.dart`.
-
+## 1. Verify DayWise policies and support
+* No email address is embedded in the app. Privacy inquiries use the developer contact details under App support on the Google Play listing.
+* Google Play still requires a valid support email in the store listing.
+* Verify the Play Store support email remains current and monitored.
+* Replace the live offers-service terms at https://sanyuj.vercel.app/terms with docs/TERMS_OF_USE.md.
+* In-app Help works offline and is documented in docs/HELP.md.
+* Ads are disabled. Complete declarations against the final SDK configuration, not the old ads-enabled guide.
 ## 2. Host the privacy policy (Play requires a URL)
 Easiest free options: GitHub Pages (put `privacy_policy.html` in a public repo, enable Pages) or a Google Site.
 Paste the public URL into Play Console. The text must match the in-app policy.

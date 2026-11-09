@@ -1,74 +1,57 @@
-import '../core/app_info.dart';
-
 class PolicySection {
   const PolicySection(this.title, this.body);
   final String title;
   final String body;
 }
 
-/// Keep in sync with docs/PRIVACY_POLICY.md and docs/privacy_policy.html
+/// Keep in sync with docs/PRIVACY_POLICY.md and docs/privacy_policy.html.
 const List<PolicySection> kPolicy = [
   PolicySection(
-    'The short version',
-    '${AppInfo.name} keeps everything you enter on your own phone. There is no account, no sign-up and no ${AppInfo.name} server. '
-        'The developer cannot see your transactions. The only data that leaves your device is what Google AdMob needs to show ads, described below.',
+    "The short version",
+    "DayWise is an income and expense tracker. Your entries are stored on your device. No sign-up is needed, and DayWise does not upload your transaction database to a developer server. Files leave the app when you choose to save or share them. Android system backup and external support are described below.",
   ),
   PolicySection(
-    'What you enter',
-    'Expenses, income, categories, notes and budgets are saved in a database inside the app on your device. '
-        'They are not uploaded anywhere by ${AppInfo.name}.',
+    "What you enter",
+    "Income, expenses, accounts, opening balances, categories, notes, budgets and recurring entries are stored locally. The developer cannot view this database through the app.",
   ),
   PolicySection(
-    'Backup, export and restore',
-    'Backups and CSV files are created only when you ask for them. You choose where they are saved or which app receives them '
-        '(for example Google Drive, email or WhatsApp). ${AppInfo.name} does not receive these files. '
-        'Restoring reads a file that you pick; it is processed on your device only.',
+    "Backup, export and restore",
+    "JSON backups and CSV exports are created when you request them. You choose the destination or receiving app. Cloud storage and sharing services handle these files under their own policies. Restore reads the file you select on your device. DayWise does not encrypt exported files. Share them only with people or services you trust.",
   ),
   PolicySection(
-    'Ads (Google AdMob)',
-    '${AppInfo.name} is free and shows ads provided by Google AdMob. To show and measure ads and prevent fraud, Google may collect and use '
-        'your device\'s advertising ID, IP address, approximate location derived from the IP address, device and app information and '
-        'how you interact with ads. Depending on your location and choices, ads may be personalised. '
-        'In the European Economic Area, the UK and Switzerland you are asked for consent before ads are requested, and you can change your choice '
-        'later in Settings > Ad privacy choices.\n\n'
-        'You can reset or delete your advertising ID, or opt out of ad personalisation, in your phone\'s Settings > Privacy (or Google > Ads). '
-        'See Google\'s policy at https://policies.google.com/privacy and https://policies.google.com/technologies/partner-sites.',
+    "Ads and Google services",
+    "Ads are disabled in this release, and DayWise does not request or display ads. The app includes the Google Mobile Ads SDK. Google services and Android may process device or network information under their own policies. If advertising is enabled in a future release, this policy and applicable consent choices will be updated. Google policy links are available below.",
   ),
   PolicySection(
-    'Permissions',
-    'Internet access is used only to load ads. Biometric / screen-lock access is used only if you turn on App lock; '
-        'the check is done by Android and ${AppInfo.name} never sees your fingerprint, face or PIN. '
-        'The app does not ask for contacts, location, camera, microphone or storage permissions.',
+    "Permissions and app lock",
+    "App lock uses Android authentication when you enable it. DayWise does not receive your fingerprint, face, PIN or pattern. Android's file picker lets you select files. The app does not request contacts, camera, microphone or device-location access. Internet and advertising-related permissions are present for external services and bundled SDKs, even while ads are disabled.",
   ),
   PolicySection(
-    'Sharing',
-    'We do not sell your data and do not share it with anyone, apart from the ad data handled by Google AdMob as described above.',
+    "Support and external links",
+    "For assistance, open the DayWise Google Play listing and expand App support to use the developer contact details listed there. DayWise does not include a support form. Do not send financial backups or sensitive transaction details with support requests. External services handle any information you choose to send under their own policies.",
   ),
   PolicySection(
-    'Android system backup',
-    'Depending on your phone settings, Android may include the app\'s data in its automatic backup to your own Google account so it can be '
-        'restored on a new phone. That is controlled by you in Android settings, not by ${AppInfo.name}.',
+    "Android system backup",
+    "Depending on your device settings, Android may back up app data to your Google account. This is controlled by Android and your settings. Keep a separate JSON backup before changing phones or uninstalling; do not rely on automatic backup alone.",
   ),
   PolicySection(
-    'Security',
-    'Your data is protected by your phone\'s own security. The optional App lock asks for your fingerprint, face, PIN or pattern before '
-        'the app opens. The database is not separately encrypted by the app, so please keep your phone secured and encrypted.',
+    "Security",
+    "Your phone's security protects your local data. Optional App lock uses Android authentication. DayWise does not separately encrypt its database, JSON backups or CSV exports. Secure your phone and protect any copies you save elsewhere.",
   ),
   PolicySection(
-    'Retention and deletion',
-    'Your data stays on your phone until you remove it. Use Settings > Delete all data, or uninstall the app. '
-        'Backup files you saved elsewhere must be deleted by you.',
+    "Retention and deletion",
+    "Local entries remain until you delete them, clear app storage or uninstall. Settings > Delete all data removes entries, recurring rules and custom accounts/categories; preferences such as appearance may remain. Delete exported files and cloud copies separately. If you contact the developer using the details on Google Play, any message you send is used for support and applicable obligations. Use the same contact details to ask about deletion of support correspondence. Android and provider backups follow their respective retention settings.",
   ),
   PolicySection(
-    'Children',
-    '${AppInfo.name} is a general-audience money tracker and is not directed at children under 13. We do not knowingly collect data from children.',
+    "Children",
+    "DayWise is a general-audience money tracker and is not directed at children under 13.",
   ),
   PolicySection(
-    'Changes',
-    'If this policy changes, the new version will be shown in the app and on the store listing, with a new date.',
+    "Changes",
+    "Updates to this policy will appear in the app and public policy, with an updated date.",
   ),
   PolicySection(
-    'Contact',
-    '${AppInfo.developer}\n${AppInfo.contactEmail}',
+    "Contact",
+    "For privacy questions or requests, open the DayWise Google Play listing, expand App support and contact the developer using the details listed there: https://play.google.com/store/apps/details?id=app.sanyuj. You can open the listing from Settings > Help > Contact support. General usage questions are answered offline in Help.",
   ),
 ];

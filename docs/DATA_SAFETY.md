@@ -1,46 +1,15 @@
-# Play Console answers (best-effort guide - verify before submitting)
+# DayWise Play Console declarations
 
-These reflect what the code does. Google's own page "Provide information for Google Play's Data safety
-section" and the AdMob page "Data disclosure for Google Play" are the authority: cross-check the
-Google Mobile Ads SDK entries there, because the SDK collects some data automatically.
+Review the final release and Google's current guidance before submitting.
 
-## App content
-* Privacy policy URL: the hosted `docs/privacy_policy.html`
-* Ads: **Yes, the app contains ads**
-* App access: all functionality available without login
-* Target audience: declare the actual intended age groups based on the app and its marketing.
-  If children are included, implement the Families policy and child-directed ad restrictions before release.
-* Content rating questionnaire: no violence, no user-generated content shared with others, no
-  location sharing; it is a finance/utility app. Expected rating: Everyone
-* Financial features declaration: if asked, choose **personal finance management / expense tracking**;
-  the app offers no loans, payments, banking, crypto or trading
-* News app / government app / health app: No
-
-## Data safety form
-* Does the app collect or share user data? **Yes** (only through the ads SDK)
-* Is all data encrypted in transit? **Yes**
-* Can users request data deletion? Your own entries stay on the device and are deleted from
-  Settings > Delete all data or by uninstalling. State that no data is held on your servers.
-
-| Data type | Collected | Shared | Purpose | Optional |
-|---|---|---|---|---|
-| Device or other IDs (advertising ID, app set ID and applicable account identifiers) | Yes | Yes (Google AdMob) | Advertising, analytics, fraud prevention | Verify configuration and user controls |
-| Approximate location (derived from IP) | Yes | Yes (Google AdMob) | Advertising, analytics, fraud prevention | Verify consent/limited ads configuration |
-| App activity / diagnostics (ad interactions, crash/performance) | Yes | Yes (Google AdMob) | Advertising, analytics, fraud prevention | Verify consent/limited ads configuration |
-
-Checked against Google's disclosure for Android GMA SDK 25.5.0 on 5 November 2026:
-https://developers.google.com/admob/android/privacy/play-data-disclosure
-These rows are a review aid. Complete the actual form against the final merged manifest,
-SDK configuration and consent behavior; advertising ID collection can be disabled by the user.
-
-Not collected by you: name, email, financial info, transactions, contacts, photos, files. Transactions
-never leave the device, so "Financial info" is **not** collected.
-
-## Other
-* App-declared permissions: INTERNET, ACCESS_NETWORK_STATE, USE_BIOMETRIC, AD_ID.
-  The verified debug merged manifest also includes USE_FINGERPRINT, ACCESS_ADSERVICES_AD_ID,
-  ACCESS_ADSERVICES_ATTRIBUTION, ACCESS_ADSERVICES_TOPICS, WAKE_LOCK, FOREGROUND_SERVICE,
-  and the app's internal DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION from SDK manifests.
-  Review the final release merged manifest and any Play Console service declarations;
-  the app itself does not start foreground work.
-* Advertising ID declaration: **Yes** the app uses the advertising ID (for ads)
+- Ads are disabled in this release. Do not copy the earlier ads-enabled answers.
+- The Google Mobile Ads SDK and advertising-related manifest permissions remain bundled. Confirm automatic SDK/platform behavior before answering Data safety or Advertising ID questions; an ads-off flag alone does not prove no data collection.
+- Income, expenses, accounts, notes, budgets and recurring rules are stored locally; DayWise does not upload the transaction database to a developer server.
+- User-requested export, sharing and Android system backup can put copies outside the app. Explain these choices accurately.
+- Contact support opens the Google Play listing so users can access the developer contact details under App support. There is no in-app support form.
+- App access: no sign-up or login; optional app lock uses the device's own authentication.
+- Financial features: describe expense tracking and personal finance management accurately. DayWise does not make payments, connect to banks or provide loans/investments.
+- Replace the old Sanyuj listing, screenshots, declarations and policy URL with those for DayWise.
+- Publish docs/privacy_policy.html at a public HTTPS URL and enter it in Play Console. A local file is not a public policy.
+- The Play listing must have a working support email, even though the app directs users to App support on Google Play instead of displaying an email.
+- Update https://sanyuj.vercel.app/terms using docs/TERMS_OF_USE.md before submission; the live page still describes offers.

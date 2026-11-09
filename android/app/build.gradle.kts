@@ -10,7 +10,19 @@ plugins {
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+
+val releaseRequested = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+if (releaseRequested) {
+    require(listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all {
+        !keystoreProperties.getProperty(it).isNullOrBlank()
+    }) { "Release signing requires android/key.properties with the Sanyuj upload credentials." }
+    require(rootProject.file(keystoreProperties.getProperty("storeFile")).isFile) {
+        "The upload keystore configured in android/key.properties was not found."
+    }
 }
 
 android {
@@ -24,8 +36,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.bhushan.daywise"
+        // Preserve the existing Sanyuj Play Console identity for updates.
+        applicationId = "app.sanyuj"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
@@ -49,7 +61,7 @@ android {
 
                 keyPassword = keystoreProperties["keyPassword"] as String
 
-                storeFile = file(keystoreProperties["storeFile"] as String)
+                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
 
                 storePassword = keystoreProperties["storePassword"] as String
 
