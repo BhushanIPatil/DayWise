@@ -141,8 +141,8 @@ class EntryTile extends StatelessWidget {
     final color = txn.isIncome ? Brand.income : Brand.expense;
     final sub = <String>[
       if (showDate) fmtDayLong(txn.date),
-      TimeOfDay.fromDateTime(txn.date).format(context),
-      s.accountById(txn.accountId).name,
+      fmtTime(txn.date),
+      if (s.selectedAccountId == null) s.accountById(txn.accountId).name,
       if (txn.note.isNotEmpty) txn.note,
     ].join(' · ');
     return InkWell(

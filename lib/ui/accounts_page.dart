@@ -17,31 +17,45 @@ class AccountField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    return DropdownButtonFormField<String>(
-      key: ValueKey(value),
-      initialValue: value,
-      isExpanded: true,
+    return InputDecorator(
       decoration: const InputDecoration(
         labelText: 'Account',
         prefixIcon: Icon(Icons.account_balance_rounded),
       ),
-      borderRadius: BorderRadius.circular(20),
-      items: [
-        for (final a in s.accounts)
-          DropdownMenuItem(
-            value: a.id,
-            child: Text(a.name, overflow: TextOverflow.ellipsis),
-          ),
-      ],
-      onChanged: (id) {
-        if (id != null) onChanged(id);
-      },
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          isDense: true,
+          borderRadius: BorderRadius.circular(20),
+          items: [
+            for (final a in s.accounts)
+              DropdownMenuItem(
+                value: a.id,
+                child: Text(a.name, overflow: TextOverflow.ellipsis),
+              ),
+            const DropdownMenuItem(
+              value: '__add_account__',
+              child: Text('+ Add account'),
+            ),
+          ],
+          onChanged: (id) async {
+            if (id == '__add_account__') {
+              final account = await showAccountEditor(context);
+              if (account != null && context.mounted) onChanged(account.id);
+            } else if (id != null) {
+              onChanged(id);
+            }
+          },
+        ),
+      ),
     );
   }
 }
 
 class AccountSwitcher extends StatelessWidget {
-  const AccountSwitcher({super.key});
+  const AccountSwitcher({super.key, this.viewToggle});
+  final Widget? viewToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -75,8 +89,21 @@ class AccountSwitcher extends StatelessWidget {
                       value: a.id,
                       child: Text(a.name, overflow: TextOverflow.ellipsis),
                     ),
+                  const DropdownMenuItem(
+                    value: '__add_account__',
+                    child: Text('+ Add account'),
+                  ),
                 ],
-                onChanged: (id) => s.selectAccount(id == '' ? null : id),
+                onChanged: (id) async {
+                  if (id == '__add_account__') {
+                    final account = await showAccountEditor(context);
+                    if (account != null && context.mounted) {
+                      s.selectAccount(account.id);
+                    }
+                  } else {
+                    s.selectAccount(id == '' ? null : id);
+                  }
+                },
               ),
             ),
           ),
@@ -87,6 +114,7 @@ class AccountSwitcher extends StatelessWidget {
               MaterialPageRoute<void>(builder: (_) => const AccountsPage()),
             ),
           ),
+          ?viewToggle,
         ],
       ),
     );
@@ -241,6 +269,11 @@ class AccountsPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
               ],
+              ListTile(
+                leading: const Icon(Icons.add_rounded),
+                title: const Text('Add account'),
+                onTap: () => showAccountEditor(context),
+              ),
             ],
           ),
         ],

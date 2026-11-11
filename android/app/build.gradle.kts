@@ -76,6 +76,7 @@ android {
         release {
             // Google Play uploads require the upload key configured in key.properties.
             signingConfig = signingConfigs.getByName("release")
+            proguardFiles("proguard-rules.pro")
         }
     }
 }

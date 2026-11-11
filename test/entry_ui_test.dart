@@ -79,9 +79,10 @@ void main() {
       tester.testTextInput.hide();
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Save expense'));
-      await tester.tap(find.text('Save expense'));
+      await tester.ensureVisible(find.text('Save income'));
+      await tester.tap(find.text('Save income'));
       await tester.pumpAndSettle();
+      expect(db.entries.single.type, TxType.income);
       expect(db.entries.single.accountId, 'bank');
       expect(db.entries.single.date, selected);
       expect(db.entries.single.amountMinor, 12550);
@@ -163,7 +164,7 @@ void main() {
       addTearDown(tester.view.resetViewInsets);
       await tester.enterText(find.byKey(const ValueKey('entry-amount')), '42');
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Save expense'));
+      await tester.ensureVisible(find.text('Save income'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },

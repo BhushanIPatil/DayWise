@@ -168,6 +168,15 @@ class AppState extends ChangeNotifier {
 
   // ------------------------------------------------------------------ queries
 
+  List<Txn> recordsInRange(DateTime? from, DateTime? to) => _txns
+      .where(
+        (t) =>
+            (selectedAccountId == null || t.accountId == selectedAccountId) &&
+            (from == null || !dateOnly(t.date).isBefore(dateOnly(from))) &&
+            (to == null || !dateOnly(t.date).isAfter(dateOnly(to))),
+      )
+      .toList();
+
   List<Txn> forDay(DateTime d) => _byDate[dateKey(d)] ?? const [];
   Totals dayTotals(DateTime d) => _dayTotals[dateKey(d)] ?? Totals.zero;
 

@@ -16,22 +16,21 @@ Future<bool?> showEntrySheet(
   BuildContext context, {
   DateTime? date,
   Txn? edit,
-  TxType type = TxType.expense,
+  TxType type = TxType.income,
   String? accountId,
 }) {
-  return showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => EntrySheet(
-      date: date ?? DateTime.now(),
-      edit: edit,
-      type: type,
-      accountId:
-          accountId ??
-          AppScope.read(context).selectedAccountId ??
-          kDefaultAccountId,
+  final selectedAccount =
+      accountId ??
+      AppScope.read(context).selectedAccountId ??
+      kDefaultAccountId;
+  return Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (_) => EntrySheet(
+        date: date ?? DateTime.now(),
+        edit: edit,
+        type: type,
+        accountId: selectedAccount,
+      ),
     ),
   );
 }
@@ -41,7 +40,7 @@ class EntrySheet extends StatefulWidget {
     super.key,
     required this.date,
     this.edit,
-    this.type = TxType.expense,
+    this.type = TxType.income,
     this.accountId = kDefaultAccountId,
   });
   final DateTime date;
@@ -177,146 +176,140 @@ class _EntrySheetState extends State<EntrySheet> {
         : cats.first.id;
     final canSave = !_saving && parseMinor(_amount.text) > 0;
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.96,
-      ),
-      decoration: BoxDecoration(
-        color: context.cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: context.cs.outlineVariant,
-                borderRadius: BorderRadius.circular(4),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.edit == null ? 'Add record' : 'Edit record'),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Category',
+            icon: Icon(cats.firstWhere((c) => c.id == selectedId).iconData),
+            initialValue: selectedId,
+            onSelected: (id) {
+              if (id == '__new__') {
+                _newCategory();
+              } else {
+                setState(() => _catId = id);
+              }
+            },
+            itemBuilder: (_) => [
+              for (final c in cats)
+                PopupMenuItem(value: c.id, child: Text(c.name)),
+              const PopupMenuItem(
+                value: '__new__',
+                child: Text('+ New category'),
               ),
+            ],
+          ),
+
+          if (widget.edit != null)
+            IconButton(
+              onPressed: _saving ? null : _delete,
+              tooltip: 'Delete record',
+              icon: const Icon(Icons.delete_outline_rounded),
+              color: Brand.expense,
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _typeToggle(accent)),
-                if (widget.edit != null) ...[
-                  const SizedBox(width: 8),
-                  IconButton.filledTonal(
-                    onPressed: _delete,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    color: Brand.expense,
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              AccountField(
+                value: _accountId,
+                onChanged: (id) => setState(() => _accountId = id),
+              ),
+              const SizedBox(height: 12),
+              _typeToggle(accent),
+              const SizedBox(height: 12),
+              EntryDateTimeFields(
+                value: _date,
+                onChanged: (date) => setState(() => _date = date),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('entry-amount'),
+                controller: _amount,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                textInputAction: TextInputAction.done,
+                inputFormatters: [
+                  TextInputFormatter.withFunction(
+                    (old, value) =>
+                        RegExp(r'^\d{0,9}(\.\d{0,2})?$').hasMatch(value.text)
+                        ? value
+                        : old,
                   ),
                 ],
-              ],
-            ),
-            const SizedBox(height: 18),
-            TextField(
-              key: const ValueKey('entry-amount'),
-              controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              textInputAction: TextInputAction.done,
-              inputFormatters: [
-                TextInputFormatter.withFunction(
-                  (old, value) =>
-                      RegExp(r'^\d{0,9}(\.\d{0,2})?$').hasMatch(value.text)
-                      ? value
-                      : old,
-                ),
-              ],
-              onChanged: (_) => setState(() {}),
-              style: TextStyle(
-                fontSize: 38,
-                fontWeight: FontWeight.w800,
-                color: accent,
-                letterSpacing: -1,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Amount',
-                hintText: '0',
-                prefixText: money.symbol,
-                prefixStyle: TextStyle(
-                  fontSize: 30,
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(
+                  fontSize: 38,
                   fontWeight: FontWeight.w800,
                   color: accent,
+                  letterSpacing: -1,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Amount',
+                  hintText: '0',
+                  prefixText: money.symbol,
+                  prefixStyle: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              height: 88,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  for (final c in cats) _catTile(c, c.id == selectedId),
-                  _newTile(),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            AccountField(
-              value: _accountId,
-              onChanged: (id) => setState(() => _accountId = id),
-            ),
-            const SizedBox(height: 12),
-            EntryDateTimeFields(
-              value: _date,
-              onChanged: (date) => setState(() => _date = date),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _note,
-              maxLength: 80,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'Add a note (optional)',
-                counterText: '',
-                prefixIcon: Icon(Icons.edit_note_rounded),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: canSave ? accentGradient(accent) : null,
-                  color: canSave ? null : context.softFill,
-                  borderRadius: BorderRadius.circular(18),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _note,
+                maxLength: 80,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  hintText: 'Add a note (optional)',
+                  counterText: '',
+                  prefixIcon: Icon(Icons.edit_note_rounded),
                 ),
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: InkWell(
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: canSave ? accentGradient(accent) : null,
+                    color: canSave ? null : context.softFill,
                     borderRadius: BorderRadius.circular(18),
-                    onTap: canSave ? _save : null,
-                    child: Center(
-                      child: Text(
-                        _saving
-                            ? 'Saving…'
-                            : widget.edit != null
-                            ? 'Update'
-                            : (_type == TxType.expense
-                                  ? 'Save expense'
-                                  : 'Save income'),
-                        style: TextStyle(
-                          fontSize: 16.5,
-                          fontWeight: FontWeight.w800,
-                          color: canSave
-                              ? Colors.white
-                              : context.cs.onSurfaceVariant,
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: canSave ? _save : null,
+                      child: Center(
+                        child: Text(
+                          _saving
+                              ? 'Saving…'
+                              : widget.edit != null
+                              ? 'Update'
+                              : (_type == TxType.expense
+                                    ? 'Save expense'
+                                    : 'Save income'),
+                          style: TextStyle(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w800,
+                            color: canSave
+                                ? Colors.white
+                                : context.cs.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -364,75 +357,9 @@ class _EntrySheetState extends State<EntrySheet> {
       ),
       child: Row(
         children: [
-          seg('Expense', TxType.expense, Brand.expense),
           seg('Income', TxType.income, Brand.income),
+          seg('Expense', TxType.expense, Brand.expense),
         ],
-      ),
-    );
-  }
-
-  Widget _catTile(Category c, bool selected) {
-    final color = c.colorValue;
-    return GestureDetector(
-      onTap: () {
-        tapHaptic();
-        setState(() => _catId = c.id);
-      },
-      child: Container(
-        width: 76,
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          color: selected ? tint(color, 0.16) : context.softFill,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? color : Colors.transparent,
-            width: 1.6,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(c.iconData, color: color, size: 26),
-            const SizedBox(height: 6),
-            Text(
-              c.name,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                height: 1.1,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _newTile() {
-    return GestureDetector(
-      onTap: _newCategory,
-      child: Container(
-        width: 76,
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: context.cs.outlineVariant, width: 1.4),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_rounded, color: context.cs.primary, size: 26),
-            const SizedBox(height: 6),
-            const Text(
-              'New',
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700),
-            ),
-          ],
-        ),
       ),
     );
   }

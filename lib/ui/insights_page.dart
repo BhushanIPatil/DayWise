@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../state/app_state.dart';
 import 'day_sheet.dart';
 import 'widgets.dart';
+import 'report_export.dart';
 
 /// Month insights: day-by-day bars, headline stats and category breakdown.
 class InsightsPage extends StatefulWidget {
@@ -31,7 +32,9 @@ class _InsightsPageState extends State<InsightsPage> {
     final now = dateOnly(DateTime.now());
     final totals = s.monthTotals(y, m);
 
-    final daily = [for (var d = 1; d <= n; d++) s.dayTotals(DateTime(y, m, d)).expense];
+    final daily = [
+      for (var d = 1; d <= n; d++) s.dayTotals(DateTime(y, m, d)).expense,
+    ];
     final maxDay = daily.fold<int>(0, math.max);
     final maxIndex = maxDay == 0 ? -1 : daily.indexOf(maxDay);
 
@@ -61,11 +64,22 @@ class _InsightsPageState extends State<InsightsPage> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          PeriodNavigator(
-            title: fmtMonth(_month),
-            subtitle: '$y',
-            onPrev: () => setState(() => _month = DateTime(y, m - 1)),
-            onNext: () => setState(() => _month = DateTime(y, m + 1)),
+          Row(
+            children: [
+              Expanded(
+                child: PeriodNavigator(
+                  title: fmtMonth(_month),
+                  subtitle: '$y',
+                  onPrev: () => setState(() => _month = DateTime(y, m - 1)),
+                  onNext: () => setState(() => _month = DateTime(y, m + 1)),
+                ),
+              ),
+              ReportExport(
+                title: 'Insights ${fmtMonth(_month)} $y',
+                from: first,
+                to: last,
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           if (count == 0)
@@ -73,7 +87,8 @@ class _InsightsPageState extends State<InsightsPage> {
               child: EmptyState(
                 icon: Icons.insights_rounded,
                 title: 'No entries this month',
-                subtitle: 'Add expenses from the calendar and your insights will appear here.',
+                subtitle:
+                    'Add expenses from the calendar and your insights will appear here.',
               ),
             )
           else ...[
@@ -83,9 +98,17 @@ class _InsightsPageState extends State<InsightsPage> {
                 children: [
                   Row(
                     children: [
-                      StatChip(label: 'Spent', value: money.full(totals.expense), color: Brand.expense),
+                      StatChip(
+                        label: 'Spent',
+                        value: money.full(totals.expense),
+                        color: Brand.expense,
+                      ),
                       const SizedBox(width: 8),
-                      StatChip(label: 'Income', value: money.full(totals.income), color: Brand.income),
+                      StatChip(
+                        label: 'Income',
+                        value: money.full(totals.income),
+                        color: Brand.income,
+                      ),
                       const SizedBox(width: 8),
                       StatChip(label: 'Saved', value: money.signed(totals.net)),
                     ],
@@ -98,7 +121,11 @@ class _InsightsPageState extends State<InsightsPage> {
                         value: math.min(1.0, totals.expense / budget),
                         minHeight: 8,
                         backgroundColor: context.softFill,
-                        valueColor: AlwaysStoppedAnimation<Color>(totals.expense > budget ? Brand.expense : context.cs.primary),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          totals.expense > budget
+                              ? Brand.expense
+                              : context.cs.primary,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -108,7 +135,11 @@ class _InsightsPageState extends State<InsightsPage> {
                         totals.expense > budget
                             ? 'Over the ${money.full(budget)} budget by ${money.full(totals.expense - budget)}'
                             : '${(totals.expense * 100 / budget).round()}% of ${money.full(budget)} budget used',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: context.cs.onSurfaceVariant),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: context.cs.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ],
@@ -123,7 +154,13 @@ class _InsightsPageState extends State<InsightsPage> {
                 children: [
                   const Padding(
                     padding: EdgeInsets.only(left: 4),
-                    child: Text('Day by day', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                    child: Text(
+                      'Day by day',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 14),
                   SizedBox(
@@ -135,17 +172,27 @@ class _InsightsPageState extends State<InsightsPage> {
                           Expanded(
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onTap: () => showDaySheet(context, DateTime(y, m, d)),
+                              onTap: () =>
+                                  showDaySheet(context, DateTime(y, m, d)),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 1),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 1,
+                                ),
                                 child: Align(
                                   alignment: Alignment.bottomCenter,
                                   child: Container(
-                                    height: daily[d - 1] == 0 ? 3 : math.max(5.0, 130 * daily[d - 1] / maxDay),
+                                    height: daily[d - 1] == 0
+                                        ? 3
+                                        : math.max(
+                                            5.0,
+                                            130 * daily[d - 1] / maxDay,
+                                          ),
                                     decoration: BoxDecoration(
                                       color: daily[d - 1] == 0
                                           ? context.softFill
-                                          : (d - 1 == maxIndex ? Brand.expense : context.cs.primary),
+                                          : (d - 1 == maxIndex
+                                                ? Brand.expense
+                                                : context.cs.primary),
                                       borderRadius: BorderRadius.circular(3),
                                     ),
                                   ),
@@ -161,7 +208,13 @@ class _InsightsPageState extends State<InsightsPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       for (final label in ['1', '${(n / 2).ceil()}', '$n'])
-                        Text(label, style: TextStyle(fontSize: 11, color: context.cs.onSurfaceVariant)),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.cs.onSurfaceVariant,
+                          ),
+                        ),
                     ],
                   ),
                 ],
@@ -175,19 +228,42 @@ class _InsightsPageState extends State<InsightsPage> {
                   Icons.local_fire_department_rounded,
                   'Highest day',
                   maxDay == 0 ? '—' : money.full(maxDay),
-                  maxDay == 0 ? '' : '${maxIndex + 1} ${fmtMonth(_month).substring(0, 3)}',
+                  maxDay == 0
+                      ? ''
+                      : '${maxIndex + 1} ${fmtMonth(_month).substring(0, 3)}',
                   Brand.expense,
                 ),
                 const SizedBox(width: 10),
-                _statTile(context, Icons.speed_rounded, 'Daily average', money.full(avg), 'so far this month', context.cs.primary),
+                _statTile(
+                  context,
+                  Icons.speed_rounded,
+                  'Daily average',
+                  money.full(avg),
+                  'so far this month',
+                  context.cs.primary,
+                ),
               ],
             ),
             const SizedBox(height: 10),
             Row(
               children: [
-                _statTile(context, Icons.celebration_rounded, 'No-spend days', '$noSpend', 'of $elapsed days', Brand.income),
+                _statTile(
+                  context,
+                  Icons.celebration_rounded,
+                  'No-spend days',
+                  '$noSpend',
+                  'of $elapsed days',
+                  Brand.income,
+                ),
                 const SizedBox(width: 10),
-                _statTile(context, Icons.receipt_long_rounded, 'Entries', '$count', 'this month', const Color(0xFFFD9644)),
+                _statTile(
+                  context,
+                  Icons.receipt_long_rounded,
+                  'Entries',
+                  '$count',
+                  'this month',
+                  const Color(0xFFFD9644),
+                ),
               ],
             ),
             if (cats.isNotEmpty) ...[
@@ -197,7 +273,13 @@ class _InsightsPageState extends State<InsightsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Where it went', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                    const Text(
+                      'Where it went',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
@@ -208,7 +290,9 @@ class _InsightsPageState extends State<InsightsPage> {
                             for (final e in cats)
                               Expanded(
                                 flex: math.max(1, e.value),
-                                child: Container(color: s.categoryById(e.key).colorValue),
+                                child: Container(
+                                  color: s.categoryById(e.key).colorValue,
+                                ),
                               ),
                           ],
                         ),
@@ -220,21 +304,33 @@ class _InsightsPageState extends State<InsightsPage> {
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Row(
                           children: [
-                            CategoryBubble(category: s.categoryById(e.key), size: 38),
+                            CategoryBubble(
+                              category: s.categoryById(e.key),
+                              size: 38,
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(s.categoryById(e.key).name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                                  Text(
+                                    s.categoryById(e.key).name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                   const SizedBox(height: 4),
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(4),
                                     child: LinearProgressIndicator(
-                                      value: catTotal == 0 ? 0 : e.value / catTotal,
+                                      value: catTotal == 0
+                                          ? 0
+                                          : e.value / catTotal,
                                       minHeight: 5,
                                       backgroundColor: context.softFill,
-                                      valueColor: AlwaysStoppedAnimation<Color>(s.categoryById(e.key).colorValue),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        s.categoryById(e.key).colorValue,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -244,10 +340,18 @@ class _InsightsPageState extends State<InsightsPage> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text(money.full(e.value), style: const TextStyle(fontWeight: FontWeight.w800)),
+                                Text(
+                                  money.full(e.value),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
                                 Text(
                                   '${(e.value * 100 / catTotal).round()}%',
-                                  style: TextStyle(fontSize: 11.5, color: context.cs.onSurfaceVariant),
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: context.cs.onSurfaceVariant,
+                                  ),
                                 ),
                               ],
                             ),
@@ -264,7 +368,14 @@ class _InsightsPageState extends State<InsightsPage> {
     );
   }
 
-  Widget _statTile(BuildContext context, IconData icon, String label, String value, String sub, Color color) {
+  Widget _statTile(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+    String sub,
+    Color color,
+  ) {
     return Expanded(
       child: GlassCard(
         padding: const EdgeInsets.all(14),
@@ -274,19 +385,41 @@ class _InsightsPageState extends State<InsightsPage> {
             Container(
               width: 34,
               height: 34,
-              decoration: BoxDecoration(color: tint(color, 0.15), borderRadius: BorderRadius.circular(11)),
+              decoration: BoxDecoration(
+                color: tint(color, 0.15),
+                borderRadius: BorderRadius.circular(11),
+              ),
               child: Icon(icon, color: color, size: 19),
             ),
             const SizedBox(height: 10),
-            Text(label, style: TextStyle(fontSize: 12, color: context.cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: context.cs.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 2),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Text(value, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              child: Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
             if (sub.isNotEmpty)
-              Text(sub, style: TextStyle(fontSize: 11.5, color: context.cs.onSurfaceVariant)),
+              Text(
+                sub,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: context.cs.onSurfaceVariant,
+                ),
+              ),
           ],
         ),
       ),

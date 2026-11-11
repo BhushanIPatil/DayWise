@@ -97,23 +97,26 @@ class EntryDateTimeFields extends StatelessWidget {
       context: context,
       initialTime: TimeOfDay.fromDateTime(value),
       helpText: 'When did it happen?',
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          timePickerTheme: TimePickerThemeData(
-            backgroundColor: ctx.cs.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
+      builder: (ctx, child) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false),
+        child: Theme(
+          data: Theme.of(ctx).copyWith(
+            timePickerTheme: TimePickerThemeData(
+              backgroundColor: ctx.cs.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              hourMinuteShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              dayPeriodShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              dialBackgroundColor: ctx.softFill,
             ),
-            hourMinuteShape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            dayPeriodShape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            dialBackgroundColor: ctx.softFill,
           ),
+          child: child!,
         ),
-        child: child!,
       ),
     );
     if (picked != null && context.mounted) {
@@ -148,7 +151,7 @@ class EntryDateTimeFields extends StatelessWidget {
         child: _field(
           context,
           'Time',
-          TimeOfDay.fromDateTime(value).format(context),
+          fmtTime(value),
           Icons.schedule_rounded,
           () => _time(context),
         ),

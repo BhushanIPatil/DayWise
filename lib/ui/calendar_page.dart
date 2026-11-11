@@ -7,8 +7,9 @@ import '../core/theme.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import 'day_sheet.dart';
-import 'search_page.dart';
+import 'record_search.dart';
 import 'widgets.dart';
+import 'report_export.dart';
 
 /// Home screen: a swipeable month calendar where every day shows what was spent.
 class CalendarPage extends StatefulWidget {
@@ -25,6 +26,9 @@ class _CalendarPageState extends State<CalendarPage> {
   late final PageController _pc;
   late DateTime _focused; // first day of the visible month
   DateTime? _selected;
+  final _searchController = TextEditingController();
+  bool _searching = false;
+  String _query = '';
 
   static int _pageFor(DateTime d) => (d.year - _baseYear) * 12 + d.month - 1;
   static DateTime _monthFor(int page) => DateTime(_baseYear, 1 + page);
@@ -40,16 +44,23 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   void dispose() {
     _pc.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   void _goTo(DateTime month) {
     final target = math.max(0, math.min(_pageCount - 1, _pageFor(month)));
-    final current = _pc.hasClients ? (_pc.page ?? target.toDouble()).round() : target;
+    final current = _pc.hasClients
+        ? (_pc.page ?? target.toDouble()).round()
+        : target;
     if ((target - current).abs() > 2) {
       _pc.jumpToPage(target);
     } else {
-      _pc.animateToPage(target, duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
+      _pc.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+      );
     }
   }
 
@@ -82,70 +93,124 @@ class _CalendarPageState extends State<CalendarPage> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () => _goTo(DateTime(_focused.year, _focused.month - 1)),
-                  icon: const Icon(Icons.chevron_left_rounded, size: 30),
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
+            child: IconButtonTheme(
+              data: IconButtonThemeData(
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(36, 40),
+                  padding: EdgeInsets.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _pickMonth,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              fmtMonth(_focused),
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.4),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () =>
+                        _goTo(DateTime(_focused.year, _focused.month - 1)),
+                    icon: const Icon(Icons.chevron_left_rounded, size: 30),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _pickMonth,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  fmtMonth(_focused),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                Icons.expand_more_rounded,
+                                color: context.cs.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
+                          Text(
+                            '${_focused.year}',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: context.cs.onSurfaceVariant,
                             ),
-                            Icon(Icons.expand_more_rounded, color: context.cs.onSurfaceVariant),
-                          ],
-                        ),
-                        Text('${_focused.year}', style: TextStyle(fontSize: 12.5, color: context.cs.onSurfaceVariant)),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                IconButton(
-                  onPressed: () => _goTo(DateTime(_focused.year, _focused.month + 1)),
-                  icon: const Icon(Icons.chevron_right_rounded, size: 30),
-                ),
-                IconButton(
-                  tooltip: 'Today',
-                  onPressed: onCurrent ? null : () => _goTo(DateTime(now.year, now.month)),
-                  icon: const Icon(Icons.today_rounded),
-                ),
-                IconButton(
-                  tooltip: 'Search',
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SearchPage())),
-                  icon: const Icon(Icons.search_rounded),
-                ),
-              ],
+                  IconButton(
+                    onPressed: () =>
+                        _goTo(DateTime(_focused.year, _focused.month + 1)),
+                    icon: const Icon(Icons.chevron_right_rounded, size: 30),
+                  ),
+                  IconButton(
+                    tooltip: 'Today',
+                    onPressed: onCurrent
+                        ? null
+                        : () => _goTo(DateTime(now.year, now.month)),
+                    icon: const Icon(Icons.today_rounded),
+                  ),
+                  ReportExport(
+                    title: 'Calendar ${fmtMonth(_focused)} ${_focused.year}',
+                    from: _focused,
+                    to: DateTime(_focused.year, _focused.month + 1, 0),
+                  ),
+                  IconButton(
+                    tooltip: 'Search',
+                    onPressed: () => setState(() => _searching = true),
+                    icon: const Icon(Icons.search_rounded),
+                  ),
+                ],
+              ),
             ),
           ),
+          if (_searching)
+            InlineRecordSearch(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _query = value),
+              onClose: () {
+                FocusScope.of(context).unfocus();
+                _searchController.clear();
+                setState(() {
+                  _searching = false;
+                  _query = '';
+                });
+              },
+            ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
             child: _SummaryCard(month: _focused, totals: totals),
           ),
           _WeekdayRow(weekStart: s.weekStart),
           Expanded(
-            child: PageView.builder(
-              controller: _pc,
-              itemCount: _pageCount,
-              onPageChanged: (i) {
-                tapHaptic();
-                setState(() => _focused = _monthFor(i));
-              },
-              itemBuilder: (context, i) => _MonthGrid(
-                month: _monthFor(i),
-                selected: _selected,
-                onTap: _openDay,
-              ),
+            child: Stack(
+              children: [
+                PageView.builder(
+                  controller: _pc,
+                  itemCount: _pageCount,
+                  onPageChanged: (i) {
+                    tapHaptic();
+                    setState(() => _focused = _monthFor(i));
+                  },
+                  itemBuilder: (context, i) => _MonthGrid(
+                    month: _monthFor(i),
+                    selected: _selected,
+                    onTap: _openDay,
+                  ),
+                ),
+                if (_query.trim().isNotEmpty)
+                  Positioned.fill(child: RecordSearchResults(query: _query)),
+              ],
             ),
           ),
         ],
@@ -169,7 +234,7 @@ class _SummaryCard extends StatelessWidget {
 
     return GlassCard(
       gradient: accentGradient(context.cs.primary),
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       radius: 26,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,7 +248,11 @@ class _SummaryCard extends StatelessWidget {
                   children: [
                     Text(
                       'Spent in ${fmtMonth(month)}',
-                      style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     FittedBox(
@@ -193,7 +262,7 @@ class _SummaryCard extends StatelessWidget {
                         money.full(totals.expense),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 30,
+                          fontSize: 24,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.8,
                         ),
@@ -214,14 +283,16 @@ class _SummaryCard extends StatelessWidget {
             ],
           ),
           if (budget > 0) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: LinearProgressIndicator(
                 value: progress,
-                minHeight: 7,
+                minHeight: 4,
                 backgroundColor: const Color(0x33FFFFFF),
-                valueColor: AlwaysStoppedAnimation<Color>(over ? const Color(0xFFFFD166) : Colors.white),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  over ? const Color(0xFFFFD166) : Colors.white,
+                ),
               ),
             ),
             const SizedBox(height: 6),
@@ -229,7 +300,11 @@ class _SummaryCard extends StatelessWidget {
               over
                   ? 'Over budget by ${money.full(totals.expense - budget)}'
                   : '${money.full(budget - totals.expense)} left of ${money.full(budget)}',
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ],
@@ -238,12 +313,19 @@ class _SummaryCard extends StatelessWidget {
   }
 
   Widget _mini(String label, String value) => Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13.5)),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+      Text(
+        value,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 13.5,
+        ),
+      ),
+    ],
+  );
 }
 
 class _WeekdayRow extends StatelessWidget {
@@ -262,7 +344,11 @@ class _WeekdayRow extends StatelessWidget {
               child: Center(
                 child: Text(
                   names[(weekStart - 1 + i) % 7],
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: context.cs.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: context.cs.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),
@@ -273,7 +359,11 @@ class _WeekdayRow extends StatelessWidget {
 }
 
 class _MonthGrid extends StatelessWidget {
-  const _MonthGrid({required this.month, required this.selected, required this.onTap});
+  const _MonthGrid({
+    required this.month,
+    required this.selected,
+    required this.onTap,
+  });
   final DateTime month;
   final DateTime? selected;
   final ValueChanged<DateTime> onTap;
@@ -306,7 +396,15 @@ class _MonthGrid extends StatelessWidget {
                   children: [
                     for (var c = 0; c < 7; c++)
                       Expanded(
-                        child: _cell(context, s, r * 7 + c - lead + 1, daysInMonth, cellH, maxExpense, today),
+                        child: _cell(
+                          context,
+                          s,
+                          r * 7 + c - lead + 1,
+                          daysInMonth,
+                          cellH,
+                          maxExpense,
+                          today,
+                        ),
                       ),
                   ],
                 ),
@@ -317,7 +415,15 @@ class _MonthGrid extends StatelessWidget {
     );
   }
 
-  Widget _cell(BuildContext context, AppState s, int day, int daysInMonth, double h, int maxExpense, DateTime today) {
+  Widget _cell(
+    BuildContext context,
+    AppState s,
+    int day,
+    int daysInMonth,
+    double h,
+    int maxExpense,
+    DateTime today,
+  ) {
     if (day < 1 || day > daysInMonth) return SizedBox(height: h);
     final date = DateTime(month.year, month.month, day);
     final totals = s.dayTotals(date);
@@ -329,6 +435,12 @@ class _MonthGrid extends StatelessWidget {
       isToday: sameDay(date, today),
       isSelected: selected != null && sameDay(date, selected!),
       overBudget: s.dailyBudgetMinor > 0 && totals.expense > s.dailyBudgetMinor,
+      dailyBudgetUsage: s.dailyBudgetMinor > 0
+          ? totals.expense / s.dailyBudgetMinor
+          : null,
+      monthlyBudgetUsage: s.monthlyBudgetMinor > 0
+          ? s.monthTotals(date.year, date.month).expense / s.monthlyBudgetMinor
+          : null,
       money: s.money,
       onTap: () => onTap(date),
     );
@@ -344,6 +456,8 @@ class _DayCell extends StatelessWidget {
     required this.isToday,
     required this.isSelected,
     required this.overBudget,
+    this.dailyBudgetUsage,
+    this.monthlyBudgetUsage,
     required this.money,
     required this.onTap,
   });
@@ -355,6 +469,8 @@ class _DayCell extends StatelessWidget {
   final bool isToday;
   final bool isSelected;
   final bool overBudget;
+  final double? dailyBudgetUsage;
+  final double? monthlyBudgetUsage;
   final MoneyFormat money;
   final VoidCallback onTap;
 
@@ -363,7 +479,9 @@ class _DayCell extends StatelessWidget {
     final cs = context.cs;
     final hasExp = totals.expense > 0;
     final hasInc = totals.income > 0;
-    final intensity = (hasExp && maxExpense > 0) ? totals.expense / maxExpense : 0.0;
+    final intensity = (hasExp && maxExpense > 0)
+        ? totals.expense / maxExpense
+        : 0.0;
 
     Color bg = Colors.transparent;
     if (hasExp) {
@@ -393,24 +511,44 @@ class _DayCell extends StatelessWidget {
               onTap();
             },
             child: Container(
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: border),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: border,
+              ),
               padding: const EdgeInsets.fromLTRB(5, 5, 5, 3),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(color: isToday ? cs.primary : Colors.transparent, shape: BoxShape.circle),
-                    child: Text(
-                      '$day',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: isToday ? Colors.white : cs.onSurface,
+                  Row(
+                    children: [
+                      Container(
+                        width: 18,
+                        height: 18,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isToday ? cs.primary : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '$day',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: isToday ? Colors.white : cs.onSurface,
+                          ),
+                        ),
                       ),
-                    ),
+                      const Spacer(),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (dailyBudgetUsage != null)
+                            _budgetDot('Daily', dailyBudgetUsage!),
+                          if (monthlyBudgetUsage != null)
+                            _budgetDot('Monthly', monthlyBudgetUsage!),
+                        ],
+                      ),
+                    ],
                   ),
                   const Spacer(),
                   if (hasExp)
@@ -422,7 +560,9 @@ class _DayCell extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
-                          color: context.isDark ? const Color(0xFFFF8FA3) : const Color(0xFFD62F4E),
+                          color: context.isDark
+                              ? const Color(0xFFFF8FA3)
+                              : const Color(0xFFD62F4E),
                         ),
                       ),
                     ),
@@ -435,7 +575,9 @@ class _DayCell extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: context.isDark ? const Color(0xFF5FE3B8) : const Color(0xFF0B8F69),
+                          color: context.isDark
+                              ? const Color(0xFF5FE3B8)
+                              : const Color(0xFF0B8F69),
                         ),
                       ),
                     ),
@@ -447,4 +589,20 @@ class _DayCell extends StatelessWidget {
       ),
     );
   }
+
+  Widget _budgetDot(String label, double usage) => Tooltip(
+    message: '$label budget: ${(usage * 100).round()}% used',
+    child: Padding(
+      padding: const EdgeInsets.only(left: 1),
+      child: Icon(
+        Icons.circle,
+        size: 5,
+        color: usage > 1
+            ? Brand.expense
+            : usage >= 0.8
+            ? Colors.orange
+            : Brand.income,
+      ),
+    ),
+  );
 }

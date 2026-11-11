@@ -11,7 +11,6 @@ import '../data/backup_service.dart';
 import '../state/app_state.dart';
 import 'categories_page.dart';
 import 'accounts_page.dart';
-import 'privacy_page.dart';
 import 'help_page.dart';
 import 'external_link.dart';
 import 'recurring_page.dart';
@@ -27,6 +26,13 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   String _version = '';
   bool _busy = false;
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -310,6 +316,8 @@ class _SettingsPageState extends State<SettingsPage> {
     return SafeArea(
       bottom: false,
       child: ListView(
+        key: const PageStorageKey('settings-scroll'),
+        controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
           const Padding(
@@ -323,11 +331,15 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ),
-          if (_busy)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 10),
-              child: LinearProgressIndicator(),
-            ),
+          SizedBox(
+            height: 14,
+            child: _busy
+                ? const Align(
+                    alignment: Alignment.topCenter,
+                    child: LinearProgressIndicator(),
+                  )
+                : null,
+          ),
           _section('Appearance', [
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
@@ -470,7 +482,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _tile(
               Icons.save_alt_rounded,
               'Save backup to phone',
-              'Choose a folder or Google Drive',
+              'Choose a folder for your .db backup',
               () {
                 _run(() async {
                   final ok = await BackupService.saveBackupToDevice(s);
@@ -491,7 +503,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _tile(
               Icons.settings_backup_restore_rounded,
               'Restore from backup',
-              'Pick a DayWise .json file',
+              'Pick a DayWise .db or older .json backup',
               () {
                 _run(() => _restore(s));
               },
@@ -523,9 +535,9 @@ class _SettingsPageState extends State<SettingsPage> {
               Icons.help_outline_rounded,
               'Help',
               'Answers about entries, backups and data safety',
-              () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const HelpPage()),
-              ),
+              () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute<void>(builder: (_) => const HelpPage())),
             ),
             _tile(
               Icons.article_outlined,
@@ -537,11 +549,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Icons.privacy_tip_rounded,
               'Privacy policy',
               'How your data is stored and handled',
-              () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const PrivacyPage()),
-                );
-              },
+              () => openExternalLink(context, AppInfo.privacyUrl),
             ),
             ValueListenableBuilder<bool>(
               valueListenable: AdService.instance.privacyOptionsRequired,
@@ -564,7 +572,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _tile(
               Icons.info_outline_rounded,
               '${AppInfo.name} ${AppInfo.tagline}',
-              _version.isEmpty ? null : 'Version $_version',
+              _version.isEmpty ? 'Version' : 'Version $_version',
               null,
             ),
           ]),
@@ -584,6 +592,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _section(String title, List<Widget> children) {
     return Padding(
+      key: ValueKey('settings-section-$title'),
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

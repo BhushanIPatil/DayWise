@@ -112,11 +112,11 @@ class _HelpPageState extends State<HelpPage> {
                       leading: const Icon(Icons.support_agent_rounded),
                       title: const Text('Contact support'),
                       subtitle: const Text(
-                        'Open App support on our Google Play listing.',
+                        'Open the support form in your browser.',
                       ),
                       trailing: const Icon(Icons.open_in_new_rounded),
                       onTap: () =>
-                          openExternalLink(context, AppInfo.playStoreUrl),
+                          openExternalLink(context, AppInfo.supportUrl),
                     ),
                     ListTile(
                       leading: const Icon(Icons.article_outlined),

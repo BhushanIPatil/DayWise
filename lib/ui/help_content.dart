@@ -7,7 +7,7 @@ class HelpQuestion {
 const List<HelpQuestion> kHelpQuestions = [
   HelpQuestion(
     "How do I start using DayWise?",
-    "Tap + to add an expense or income. Enter the amount, choose the account and category, check the date and time, then tap Save expense or Save income. Saved entries appear in the calendar, week view and insights.",
+    "Tap + to open Add record. Choose an account, select Income or Expense (Income is selected first), check the date and time, enter the amount and an optional note, then save. Use the category icon at the top to change or add a category. Saved entries appear in the calendar, list, week view and insights.",
   ),
   HelpQuestion(
     "How do I edit or delete an entry?",
@@ -15,11 +15,11 @@ const List<HelpQuestion> kHelpQuestions = [
   ),
   HelpQuestion(
     "How do I back up my data?",
-    "Open Settings > Backup & restore > Save backup to phone. Choose a destination and save the JSON file. Or use Share backup to send it to a storage app such as Google Drive. Keep a recent copy outside this phone; a file stored only on the phone can be lost with it.",
+    "Open Settings > Backup & restore > Save backup to phone. Choose a folder and save the SQLite .db file. Or use Share backup to send the file to another app. Keep a recent copy outside this phone; a file stored only on the phone can be lost with it.",
   ),
   HelpQuestion(
     "How do I import or restore a backup?",
-    "Open Settings > Backup & restore > Restore from backup and select a DayWise JSON backup. Choose Merge to add missing records while keeping current data, or Replace to erase current records and load the backup. Save a fresh backup before using Replace.",
+    "Open Settings > Backup & restore > Restore from backup and select a DayWise .db backup. Older DayWise JSON backups also work. Choose Merge to add missing records while keeping current data, or Replace to erase current records and load the backup. Save a fresh backup before using Replace.",
   ),
   HelpQuestion(
     "What is the difference between Merge and Replace?",
@@ -27,19 +27,19 @@ const List<HelpQuestion> kHelpQuestions = [
   ),
   HelpQuestion(
     "How do I export to Excel or Google Sheets?",
-    "Open Settings > Backup & restore > Export CSV and choose where to share or save the file. Open it in your spreadsheet app. CSV is for viewing and analysis; use a JSON backup to restore DayWise.",
+    "Use the export icon in Calendar, List, Week or Insights to save or share a PDF or CSV for the displayed period and account. Switch between calendar and list using the icon beside the account selector. Settings > Backup & restore > Export CSV exports all records. CSV is for viewing and analysis; use a database backup to restore DayWise.",
   ),
   HelpQuestion(
     "Can I import CSV or a bank statement?",
-    "No. Restore accepts DayWise JSON backups. CSV exports, bank statements and backups from other apps cannot be imported. You can enter those transactions manually.",
+    "No. Restore accepts DayWise .db backups and older DayWise JSON backups. CSV exports, bank statements and backups from other apps cannot be imported. You can enter those transactions manually.",
   ),
   HelpQuestion(
     "Is my data safe and private?",
-    "Your transaction database stays on your device; there is no sign-up or developer transaction server. Optional App lock uses Android authentication. DayWise does not separately encrypt its database, JSON backups or CSV exports. Protect your phone and any files you share. Android may back up app data depending on your settings. See Privacy policy for external services and support details.",
+    "Your transaction database stays on your device; there is no sign-up or developer transaction server. Optional App lock uses Android authentication. DayWise does not separately encrypt its database, database backups or CSV exports. Protect your phone and any files you share. Android may back up app data depending on your settings. See Privacy policy for external services and support details.",
   ),
   HelpQuestion(
     "Will data survive uninstalling or changing phones?",
-    "Do not rely on it. Uninstalling or clearing app storage can remove local entries. Save a JSON backup outside the app first, move it to the new phone and restore it there. Android automatic restore depends on your device and account settings.",
+    "Do not rely on it. Uninstalling or clearing app storage can remove local entries. Save a database backup outside the app first, move it to the new phone and restore it there. Android automatic restore depends on your device and account settings.",
   ),
   HelpQuestion(
     "How do accounts and opening balances work?",
@@ -75,6 +75,6 @@ const List<HelpQuestion> kHelpQuestions = [
   ),
   HelpQuestion(
     "Why is a button unavailable or a save failing?",
-    "Enter a valid amount greater than zero and fill in required fields. Wait for saves or restores to finish. For file problems, check free storage and choose a storage app available on your phone. Restore needs a DayWise JSON backup. If the problem continues, contact support below without sending private financial files.",
+    "Enter a valid amount greater than zero and fill in required fields. Wait for saves or restores to finish. For file problems, check free storage and choose a storage app available on your phone. Restore needs a DayWise .db backup or an older DayWise JSON backup. If the problem continues, contact support below without sending private financial files.",
   ),
 ];

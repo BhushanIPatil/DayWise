@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../state/app_state.dart';
 import 'day_sheet.dart';
 import 'widgets.dart';
+import 'report_export.dart';
 
 /// Seven bars: how much was spent on each day of the week.
 class WeekPage extends StatefulWidget {
@@ -53,11 +54,22 @@ class _WeekPageState extends State<WeekPage> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          PeriodNavigator(
-            title: title,
-            subtitle: '${end.year}',
-            onPrev: () => setState(() => _anchor = addDays(_anchor, -7)),
-            onNext: () => setState(() => _anchor = addDays(_anchor, 7)),
+          Row(
+            children: [
+              Expanded(
+                child: PeriodNavigator(
+                  title: title,
+                  subtitle: '${end.year}',
+                  onPrev: () => setState(() => _anchor = addDays(_anchor, -7)),
+                  onNext: () => setState(() => _anchor = addDays(_anchor, 7)),
+                ),
+              ),
+              ReportExport(
+                title: 'Week ${dateKey(start)} to ${dateKey(end)}',
+                from: start,
+                to: end,
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           GlassCard(
@@ -65,27 +77,52 @@ class _WeekPageState extends State<WeekPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Spent this week', style: TextStyle(fontSize: 12.5, color: context.cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                Text(
+                  'Spent this week',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: context.cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 2),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     money.full(total.expense),
-                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.8),
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.8,
+                    ),
                   ),
                 ),
                 if (deltaText != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(deltaText, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: deltaColor)),
+                    child: Text(
+                      deltaText,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: deltaColor,
+                      ),
+                    ),
                   ),
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    StatChip(label: 'Income', value: money.full(total.income), color: Brand.income),
+                    StatChip(
+                      label: 'Income',
+                      value: money.full(total.income),
+                      color: Brand.income,
+                    ),
                     const SizedBox(width: 8),
-                    StatChip(label: 'Daily average', value: money.full(total.expense ~/ 7)),
+                    StatChip(
+                      label: 'Daily average',
+                      value: money.full(total.expense ~/ 7),
+                    ),
                   ],
                 ),
               ],
@@ -105,9 +142,13 @@ class _WeekPageState extends State<WeekPage> {
                         label: fmtWeekday(days[i]).substring(0, 3),
                         value: per[i].expense,
                         ratio: maxExp == 0 ? 0 : per[i].expense / maxExp,
-                        valueLabel: per[i].expense == 0 ? '' : money.compact(per[i].expense),
+                        valueLabel: per[i].expense == 0
+                            ? ''
+                            : money.compact(per[i].expense),
                         isToday: sameDay(days[i], today),
-                        overBudget: s.dailyBudgetMinor > 0 && per[i].expense > s.dailyBudgetMinor,
+                        overBudget:
+                            s.dailyBudgetMinor > 0 &&
+                            per[i].expense > s.dailyBudgetMinor,
                         onTap: () => showDaySheet(context, days[i]),
                       ),
                     ),
@@ -125,7 +166,10 @@ class _WeekPageState extends State<WeekPage> {
                     borderRadius: BorderRadius.circular(12),
                     onTap: () => showDaySheet(context, days[i]),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 4,
+                      ),
                       child: Row(
                         children: [
                           SizedBox(
@@ -134,21 +178,33 @@ class _WeekPageState extends State<WeekPage> {
                               '${fmtWeekday(days[i]).substring(0, 3)} ${days[i].day}',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color: sameDay(days[i], today) ? context.cs.primary : null,
+                                color: sameDay(days[i], today)
+                                    ? context.cs.primary
+                                    : null,
                               ),
                             ),
                           ),
                           Expanded(
                             child: Text(
-                              per[i].income > 0 ? '+${money.full(per[i].income)}' : '',
-                              style: const TextStyle(color: Brand.income, fontWeight: FontWeight.w700, fontSize: 12.5),
+                              per[i].income > 0
+                                  ? '+${money.full(per[i].income)}'
+                                  : '',
+                              style: const TextStyle(
+                                color: Brand.income,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12.5,
+                              ),
                             ),
                           ),
                           Text(
-                            per[i].expense > 0 ? money.full(per[i].expense) : '—',
+                            per[i].expense > 0
+                                ? money.full(per[i].expense)
+                                : '—',
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
-                              color: per[i].expense > 0 ? Brand.expense : context.cs.onSurfaceVariant,
+                              color: per[i].expense > 0
+                                  ? Brand.expense
+                                  : context.cs.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -165,19 +221,33 @@ class _WeekPageState extends State<WeekPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Top categories', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  const Text(
+                    'Top categories',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
                   const SizedBox(height: 10),
                   for (final e in cats.take(4))
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 5),
                       child: Row(
                         children: [
-                          CategoryBubble(category: s.categoryById(e.key), size: 36),
+                          CategoryBubble(
+                            category: s.categoryById(e.key),
+                            size: 36,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Text(s.categoryById(e.key).name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                            child: Text(
+                              s.categoryById(e.key).name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
-                          Text(money.full(e.value), style: const TextStyle(fontWeight: FontWeight.w800)),
+                          Text(
+                            money.full(e.value),
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
                         ],
                       ),
                     ),
@@ -225,7 +295,13 @@ class _Bar extends StatelessWidget {
             height: 16,
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              child: Text(valueLabel, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800)),
+              child: Text(
+                valueLabel,
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 4),

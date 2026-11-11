@@ -9,9 +9,10 @@ import 'entry_sheet.dart';
 import 'insights_page.dart';
 import 'settings_page.dart';
 import 'week_page.dart';
+import 'records_page.dart';
 import 'widgets.dart';
 
-/// Four tabs plus a centre "+" button, in a floating pill-shaped bar.
+/// Calendar (or list), week, insights and settings with a quick add button.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -21,6 +22,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _tab = 0;
+  bool _listView = false;
 
   @override
   void initState() {
@@ -42,28 +44,51 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     }
   }
 
-  static const List<Widget> _pages = [
-    CalendarPage(),
-    WeekPage(),
-    InsightsPage(),
-    SettingsPage(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: _tab != 3,
       body: Stack(
         children: [
           const AppBackground(),
           Column(
             children: [
               if (_tab != 3)
-                const SafeArea(bottom: false, child: AccountSwitcher()),
+                SafeArea(
+                  bottom: false,
+                  child: AccountSwitcher(
+                    viewToggle: _tab == 0
+                        ? IconButton(
+                            tooltip: _listView
+                                ? 'Switch to calendar'
+                                : 'Switch to list',
+                            icon: Icon(
+                              _listView
+                                  ? Icons.calendar_month_rounded
+                                  : Icons.list_alt_rounded,
+                            ),
+                            onPressed: () =>
+                                setState(() => _listView = !_listView),
+                          )
+                        : null,
+                  ),
+                ),
               Expanded(
                 child: MediaQuery.removePadding(
                   context: context,
                   removeTop: _tab != 3,
-                  child: IndexedStack(index: _tab, children: _pages),
+                  child: IndexedStack(
+                    index: _tab,
+                    children: [
+                      IndexedStack(
+                        index: _listView ? 1 : 0,
+                        children: const [CalendarPage(), RecordsPage()],
+                      ),
+                      const WeekPage(),
+                      const InsightsPage(),
+                      const SettingsPage(),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -178,7 +203,7 @@ class _NavPill extends StatelessWidget {
             AnimatedContainer(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: sel
                     ? tint(context.cs.primary, 0.14)

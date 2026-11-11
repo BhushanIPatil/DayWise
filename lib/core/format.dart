@@ -5,7 +5,8 @@ import 'package:intl/intl.dart';
 String two(int n) => n.toString().padLeft(2, '0');
 
 /// yyyy-MM-dd, used as the storage key for a calendar day.
-String dateKey(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${two(d.month)}-${two(d.day)}';
+String dateKey(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${two(d.month)}-${two(d.day)}';
 
 /// Parses a yyyy-MM-dd key. Throws [FormatException] for invalid input.
 DateTime parseKey(String k) {
@@ -38,6 +39,7 @@ String fmtDayLong(DateTime d) => DateFormat('d MMMM yyyy', 'en_US').format(d);
 String fmtWeekday(DateTime d) => DateFormat('EEEE', 'en_US').format(d);
 String fmtShort(DateTime d) => DateFormat('d MMM', 'en_US').format(d);
 String fmtStamp(DateTime d) => DateFormat('yyyyMMdd-HHmm', 'en_US').format(d);
+String fmtTime(DateTime d) => DateFormat('h:mm a', 'en_US').format(d);
 
 // ------------------------------------------------------------- currency
 
@@ -77,8 +79,10 @@ const List<Currency> kCurrencies = [
   Currency('BRL', 'R\$ ', 'Brazilian Real'),
 ];
 
-Currency currencyByCode(String code) =>
-    kCurrencies.firstWhere((c) => c.code == code, orElse: () => kCurrencies.first);
+Currency currencyByCode(String code) => kCurrencies.firstWhere(
+  (c) => c.code == code,
+  orElse: () => kCurrencies.first,
+);
 
 /// Inserts thousands separators into a string of digits.
 String groupDigits(String digits, bool indian) {
