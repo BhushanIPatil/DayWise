@@ -8,7 +8,7 @@ DayWise is an income and expense tracker. Your entries are stored on your device
 
 ## What you enter
 
-Income, expenses, accounts, opening balances, categories, notes, budgets and recurring entries are stored locally. The developer cannot view this database through the app.
+Income, expenses, accounts, opening balances, notes, budgets and recurring entries are stored locally. The developer cannot view this database through the app.
 
 ## Backup, export and restore
 
@@ -24,7 +24,7 @@ App lock uses Android authentication when you enable it. DayWise does not receiv
 
 ## Support and external links
 
-For assistance, open the DayWise Google Play listing and expand App support to use the developer contact details listed there. DayWise does not include a support form. Do not send financial backups or sensitive transaction details with support requests. External services handle any information you choose to send under their own policies.
+For assistance, choose Contact us in the About section of Settings to open the support form in your browser. Help and support pages are hosted externally and require internet access. Do not send financial backups or sensitive transaction details with support requests. External services handle any information you choose to send under their own policies.
 
 ## Android system backup
 
@@ -36,7 +36,7 @@ Your phone's security protects your local data. Optional App lock uses Android a
 
 ## Retention and deletion
 
-Local entries remain until you delete them, clear app storage or uninstall. Settings > Delete all data removes entries, recurring rules and custom accounts/categories; preferences such as appearance may remain. Delete exported files and cloud copies separately. If you contact the developer using the details on Google Play, any message you send is used for support and applicable obligations. Use the same contact details to ask about deletion of support correspondence. Android and provider backups follow their respective retention settings.
+Local entries remain until you delete them, clear app storage or uninstall. Settings > Delete all data removes entries, recurring rules and custom accounts; preferences such as appearance may remain. Delete exported files and cloud copies separately. If you contact the developer using the details on Google Play, any message you send is used for support and applicable obligations. Use the same contact details to ask about deletion of support correspondence. Android and provider backups follow their respective retention settings.
 
 ## Children
 
@@ -48,6 +48,6 @@ Updates to this policy will appear in the app and public policy, with an updated
 
 ## Contact
 
-For privacy questions or requests, open the DayWise Google Play listing, expand App support and contact the developer using the details listed there: https://play.google.com/store/apps/details?id=app.sanyuj. You can open the listing from Settings > Help > Contact support. General usage questions are answered offline in Help.
+For privacy questions or requests, open the DayWise Google Play listing, expand App support and contact the developer using the details listed there: https://play.google.com/store/apps/details?id=app.sanyuj. You can also open the support form from Contact us in the About section of Settings. Help opens the online DayWise help page.
 
 Google policies: https://policies.google.com/privacy and https://policies.google.com/technologies/partner-sites

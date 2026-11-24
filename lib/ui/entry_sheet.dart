@@ -6,10 +6,10 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
-import 'categories_page.dart';
 import 'accounts_page.dart';
 import 'date_time_fields.dart';
 import 'widgets.dart';
+import 'transaction_type_toggle.dart';
 
 /// Add a new entry (pass [date]) or edit an existing one (pass [edit]).
 Future<bool?> showEntrySheet(
@@ -22,7 +22,7 @@ Future<bool?> showEntrySheet(
   final selectedAccount =
       accountId ??
       AppScope.read(context).selectedAccountId ??
-      kDefaultAccountId;
+      AppScope.read(context).defaultAccount.id;
   return Navigator.of(context).push<bool>(
     MaterialPageRoute(
       builder: (_) => EntrySheet(
@@ -58,7 +58,6 @@ class _EntrySheetState extends State<EntrySheet> {
   final TextEditingController _amount = TextEditingController();
   late String _accountId;
   bool _saving = false;
-  String? _catId;
   final TextEditingController _note = TextEditingController();
 
   @override
@@ -70,7 +69,6 @@ class _EntrySheetState extends State<EntrySheet> {
       _date = e.date;
       _amount.text = minorToInput(e.amountMinor);
       _accountId = e.accountId;
-      _catId = e.categoryId;
       _note.text = e.note;
     } else {
       _type = widget.type;
@@ -82,7 +80,10 @@ class _EntrySheetState extends State<EntrySheet> {
         now.hour,
         now.minute,
       );
-      _accountId = widget.accountId;
+      final s = AppScope.read(context);
+      _accountId = s.accounts.any((a) => a.id == widget.accountId)
+          ? widget.accountId
+          : s.defaultAccount.id;
     }
   }
 
@@ -93,21 +94,12 @@ class _EntrySheetState extends State<EntrySheet> {
     super.dispose();
   }
 
-  Future<void> _newCategory() async {
-    final created = await showCategoryEditor(context, _type);
-    if (created != null && mounted) setState(() => _catId = created.id);
-  }
-
   Future<void> _save() async {
     if (_saving) return;
     final minor = parseMinor(_amount.text);
     final s = AppScope.read(context);
-    if (minor <= 0) return;
+    if (minor <= BigInt.zero) return;
     setState(() => _saving = true);
-    final cats = s.categoriesFor(_type);
-    final catId = (_catId != null && cats.any((c) => c.id == _catId))
-        ? _catId!
-        : cats.first.id;
     final old = widget.edit;
     final t = Txn(
       id: old?.id,
@@ -115,7 +107,7 @@ class _EntrySheetState extends State<EntrySheet> {
       accountId: _accountId,
       amountMinor: minor,
       type: _type,
-      categoryId: catId,
+      categoryId: old?.categoryId ?? '',
       note: _note.text.trim(),
       createdAt: old?.createdAt ?? DateTime.now().millisecondsSinceEpoch,
     );
@@ -169,38 +161,13 @@ class _EntrySheetState extends State<EntrySheet> {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final money = s.money;
-    final cats = s.categoriesFor(_type);
     final accent = _type == TxType.expense ? Brand.expense : Brand.income;
-    final selectedId = (_catId != null && cats.any((c) => c.id == _catId))
-        ? _catId
-        : cats.first.id;
-    final canSave = !_saving && parseMinor(_amount.text) > 0;
+    final canSave = !_saving && parseMinor(_amount.text) > BigInt.zero;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.edit == null ? 'Add record' : 'Edit record'),
         actions: [
-          PopupMenuButton<String>(
-            tooltip: 'Category',
-            icon: Icon(cats.firstWhere((c) => c.id == selectedId).iconData),
-            initialValue: selectedId,
-            onSelected: (id) {
-              if (id == '__new__') {
-                _newCategory();
-              } else {
-                setState(() => _catId = id);
-              }
-            },
-            itemBuilder: (_) => [
-              for (final c in cats)
-                PopupMenuItem(value: c.id, child: Text(c.name)),
-              const PopupMenuItem(
-                value: '__new__',
-                child: Text('+ New category'),
-              ),
-            ],
-          ),
-
           if (widget.edit != null)
             IconButton(
               onPressed: _saving ? null : _delete,
@@ -211,8 +178,46 @@ class _EntrySheetState extends State<EntrySheet> {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+        bottom: false,
+        child: PinnedForm(
+          expand: true,
+          action: SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: canSave ? accentGradient(accent) : null,
+                color: canSave ? null : context.softFill,
+                borderRadius: BorderRadius.circular(Brand.controlRadius),
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(Brand.controlRadius),
+                  onTap: canSave ? _save : null,
+                  child: Center(
+                    child: Text(
+                      _saving
+                          ? 'Saving…'
+                          : widget.edit != null
+                          ? 'Update'
+                          : (_type == TxType.expense
+                                ? 'Save expense'
+                                : 'Save income'),
+                      style: TextStyle(
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w800,
+                        color: canSave
+                            ? Colors.white
+                            : context.cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          contentPadding: const EdgeInsets.all(16),
           child: Column(
             children: [
               AccountField(
@@ -220,7 +225,10 @@ class _EntrySheetState extends State<EntrySheet> {
                 onChanged: (id) => setState(() => _accountId = id),
               ),
               const SizedBox(height: 12),
-              _typeToggle(accent),
+              TransactionTypeToggle(
+                value: _type,
+                onChanged: (type) => setState(() => _type = type),
+              ),
               const SizedBox(height: 12),
               EntryDateTimeFields(
                 value: _date,
@@ -237,7 +245,7 @@ class _EntrySheetState extends State<EntrySheet> {
                 inputFormatters: [
                   TextInputFormatter.withFunction(
                     (old, value) =>
-                        RegExp(r'^\d{0,9}(\.\d{0,2})?$').hasMatch(value.text)
+                        RegExp(r'^\d*(\.\d{0,2})?$').hasMatch(value.text)
                         ? value
                         : old,
                   ),
@@ -251,7 +259,12 @@ class _EntrySheetState extends State<EntrySheet> {
                 ),
                 decoration: InputDecoration(
                   labelText: 'Amount',
-                  hintText: '0',
+                  hintText: 'Amount',
+                  hintStyle: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0,
+                  ),
                   prefixText: money.symbol,
                   prefixStyle: TextStyle(
                     fontSize: 30,
@@ -263,103 +276,19 @@ class _EntrySheetState extends State<EntrySheet> {
               const SizedBox(height: 12),
               TextField(
                 controller: _note,
-                maxLength: 80,
+                minLines: 1,
+                maxLines: null,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
-                  hintText: 'Add a note (optional)',
+                  labelText: 'Note [Optional]',
+                  hintText: 'Note [Optional]',
                   counterText: '',
                   prefixIcon: Icon(Icons.edit_note_rounded),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: canSave ? accentGradient(accent) : null,
-                    color: canSave ? null : context.softFill,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      onTap: canSave ? _save : null,
-                      child: Center(
-                        child: Text(
-                          _saving
-                              ? 'Saving…'
-                              : widget.edit != null
-                              ? 'Update'
-                              : (_type == TxType.expense
-                                    ? 'Save expense'
-                                    : 'Save income'),
-                          style: TextStyle(
-                            fontSize: 16.5,
-                            fontWeight: FontWeight.w800,
-                            color: canSave
-                                ? Colors.white
-                                : context.cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _typeToggle(Color accent) {
-    Widget seg(String label, TxType t, Color c) {
-      final sel = _type == t;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () {
-            if (_type != t) {
-              tapHaptic();
-              setState(() {
-                _type = t;
-                _catId = null;
-              });
-            }
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 42,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: sel ? c : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: sel ? Colors.white : context.cs.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: context.softFill,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          seg('Income', TxType.income, Brand.income),
-          seg('Expense', TxType.expense, Brand.expense),
-        ],
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'fixtures/legacy_categories.dart';
 import 'package:daywise/data/backup.dart';
 import 'package:daywise/data/models.dart';
 import 'package:daywise/data/recurrence.dart';
@@ -36,7 +37,7 @@ void main() {
     expect(p.txns.length, 2);
     expect(p.skipped, 0);
     expect(p.txns[0].note, 'Lunch, with "friends"');
-    expect(p.txns[0].amountMinor, 12050);
+    expect(p.txns[0].amountMinor, BigInt.from(12050));
     expect(p.txns[1].isIncome, true);
     expect(p.categories.length, kDefaultCategories.length);
     expect(p.currency, 'INR');
@@ -100,17 +101,17 @@ void main() {
   });
 
   test('csv escaping', () {
-    final csv = encodeCsv(
-      txns,
-      (id) => id == 'food' ? 'Food & Dining' : 'Salary',
-    );
+    final csv = encodeCsv(txns);
     final lines = csv.trim().split('\r\n');
-    expect(lines.first, 'Date,Time,Account,Type,Category,Amount,Note');
+    expect(lines.first, 'Date,Time,Note,Account,Type,Amount,Balance');
     expect(
       lines[1],
-      '2026-10-01,00:00,everyday,Expense,Food & Dining,120.50,"Lunch, with ""friends"""',
+      '1 October 2026,12:00 AM,"Lunch, with ""friends""",everyday,Expense,120.50,-120.50',
     );
-    expect(lines[2], '2026-10-02,00:00,everyday,Income,Salary,50000.00,');
+    expect(
+      lines[2],
+      '2 October 2026,12:00 AM,,everyday,Income,50000.00,49879.50',
+    );
   });
 
   test('accounts and selected transaction times survive backup and CSV', () {
@@ -155,13 +156,35 @@ void main() {
       restored.accounts
           .firstWhere((a) => a.id == account.id)
           .openingBalanceMinor,
-      123456,
+      BigInt.from(123456),
     );
     expect(restored.rules.single.accountId, account.id);
     expect(restored.rules.single.timeMinutes, 570);
     expect(
-      encodeCsv([entry], (_) => 'Food', accountName: (_) => account.name),
-      contains('2026-11-05,18:42,"Savings, joint",Expense,Food,45.00,'),
+      encodeCsv(
+        [entry],
+        accountName: (_) => account.name,
+        balanceAfter: (_) => account.openingBalanceMinor - entry.amountMinor,
+      ),
+      contains(
+        '5 November 2026,6:42 PM,,"Savings, joint",Expense,45.00,1189.56',
+      ),
+    );
+  });
+
+  test('CSV keeps multiline notes and uses noon with PM', () {
+    final entry = Txn(
+      date: DateTime(2026, 11, 24, 12),
+      amountMinor: 100,
+      type: TxType.income,
+      note: 'First line\nSecond line, "quoted"',
+      createdAt: 1,
+    );
+    expect(
+      encodeCsv([entry]),
+      contains(
+        '24 November 2026,12:00 PM,"First line\nSecond line, ""quoted""",everyday,Income,1.00,1.00',
+      ),
     );
   });
 

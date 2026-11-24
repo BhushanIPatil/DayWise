@@ -6,14 +6,18 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
-import 'day_sheet.dart';
+import 'day_page.dart';
 import 'record_search.dart';
 import 'widgets.dart';
 import 'report_export.dart';
+import 'accounts_page.dart';
+import 'report_period.dart';
+import 'upcoming_recurring.dart';
 
 /// Home screen: a swipeable month calendar where every day shows what was spent.
 class CalendarPage extends StatefulWidget {
-  const CalendarPage({super.key});
+  const CalendarPage({super.key, this.onWeekView});
+  final VoidCallback? onWeekView;
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -65,114 +69,56 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Future<void> _pickMonth() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _focused,
-      firstDate: DateTime(_baseYear),
-      lastDate: DateTime(_baseYear + 99, 12, 31),
-      initialDatePickerMode: DatePickerMode.year,
-      helpText: 'Jump to month',
-    );
-    if (d != null) _goTo(DateTime(d.year, d.month));
+    final d = await showMonthYearPicker(context, _focused);
+    if (d != null && mounted) _goTo(d);
   }
 
   void _openDay(DateTime d) {
     setState(() => _selected = d);
-    showDaySheet(context, d);
+    showDayPage(context, d);
   }
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final totals = s.monthTotals(_focused.year, _focused.month);
-    final now = DateTime.now();
-    final onCurrent = _focused.year == now.year && _focused.month == now.month;
 
     return SafeArea(
       bottom: false,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
-            child: IconButtonTheme(
-              data: IconButtonThemeData(
-                style: IconButton.styleFrom(
-                  minimumSize: const Size(36, 40),
-                  padding: EdgeInsets.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          AccountSwitcher(
+            viewToggle: IconButton(
+              tooltip: 'Search',
+              onPressed: () => setState(() => _searching = true),
+              icon: const Icon(Icons.search_rounded),
+            ),
+            actions: ReportExport(
+              includeAccounts: true,
+              title: 'Calendar ${fmtMonth(_focused)} ${_focused.year}',
+              from: _focused,
+              to: DateTime(_focused.year, _focused.month + 1, 0),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: PeriodNavigator(
+                  onSelect: _pickMonth,
+                  title: fmtMonth(_focused),
+                  subtitle: '${_focused.year}',
+                  onPrev: () =>
+                      _goTo(DateTime(_focused.year, _focused.month - 1)),
+                  onNext: () =>
+                      _goTo(DateTime(_focused.year, _focused.month + 1)),
                 ),
               ),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () =>
-                        _goTo(DateTime(_focused.year, _focused.month - 1)),
-                    icon: const Icon(Icons.chevron_left_rounded, size: 30),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _pickMonth,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  fmtMonth(_focused),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                Icons.expand_more_rounded,
-                                color: context.cs.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                          Text(
-                            '${_focused.year}',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              color: context.cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () =>
-                        _goTo(DateTime(_focused.year, _focused.month + 1)),
-                    icon: const Icon(Icons.chevron_right_rounded, size: 30),
-                  ),
-                  IconButton(
-                    tooltip: 'Today',
-                    onPressed: onCurrent
-                        ? null
-                        : () => _goTo(DateTime(now.year, now.month)),
-                    icon: const Icon(Icons.today_rounded),
-                  ),
-                  ReportExport(
-                    title: 'Calendar ${fmtMonth(_focused)} ${_focused.year}',
-                    from: _focused,
-                    to: DateTime(_focused.year, _focused.month + 1, 0),
-                  ),
-                  IconButton(
-                    tooltip: 'Search',
-                    onPressed: () => setState(() => _searching = true),
-                    icon: const Icon(Icons.search_rounded),
-                  ),
-                ],
+              IconButton(
+                tooltip: 'Switch to week',
+                onPressed: widget.onWeekView,
+                icon: const Icon(Icons.view_week_rounded),
               ),
-            ),
+            ],
           ),
           if (_searching)
             InlineRecordSearch(
@@ -229,25 +175,26 @@ class _SummaryCard extends StatelessWidget {
     final s = AppScope.of(context);
     final money = s.money;
     final budget = s.monthlyBudgetMinor;
-    final progress = budget > 0 ? math.min(1.0, totals.expense / budget) : 0.0;
-    final over = budget > 0 && totals.expense > budget;
+    final progress = minorRatio(totals.expense, budget);
+    final over = budget > 0 && totals.expense > BigInt.from(budget);
 
     return GlassCard(
       gradient: accentGradient(context.cs.primary),
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-      radius: 26,
+      radius: Brand.cardRadius,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
+                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Spent in ${fmtMonth(month)}',
+                      'Balance in ${fmtMonth(month)}',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 12.5,
@@ -259,10 +206,10 @@ class _SummaryCard extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        money.full(totals.expense),
+                        money.signed(totals.net),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 24,
+                          fontSize: 28,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.8,
                         ),
@@ -272,20 +219,37 @@ class _SummaryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _mini('Income', money.full(totals.income)),
-                  const SizedBox(height: 6),
-                  _mini('Balance', money.signed(totals.net)),
-                ],
+              Flexible(
+                flex: 2,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _mini(
+                          'Income',
+                          money.full(totals.income),
+                          const Color(0xFF8FF0CD),
+                        ),
+                        const SizedBox(height: 6),
+                        _mini(
+                          'Expense',
+                          money.full(totals.expense),
+                          const Color(0xFFFFB5C4),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
           if (budget > 0) ...[
             const SizedBox(height: 6),
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(Brand.controlRadius),
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 4,
@@ -298,8 +262,8 @@ class _SummaryCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               over
-                  ? 'Over budget by ${money.full(totals.expense - budget)}'
-                  : '${money.full(budget - totals.expense)} left of ${money.full(budget)}',
+                  ? 'Over budget by ${money.full(totals.expense - BigInt.from(budget))}'
+                  : '${money.full(BigInt.from(budget) - totals.expense)} left of ${money.full(budget)}',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
@@ -312,14 +276,21 @@ class _SummaryCard extends StatelessWidget {
     );
   }
 
-  Widget _mini(String label, String value) => Column(
+  Widget _mini(String label, String value, Color color) => Column(
     crossAxisAlignment: CrossAxisAlignment.end,
     children: [
-      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+      Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
       Text(
         value,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: color,
           fontWeight: FontWeight.w800,
           fontSize: 13.5,
         ),
@@ -377,7 +348,7 @@ class _MonthGrid extends StatelessWidget {
     final rows = ((lead + daysInMonth) / 7).ceil();
     final today = dateOnly(DateTime.now());
 
-    var maxExpense = 0;
+    var maxExpense = BigInt.zero;
     for (var d = 1; d <= daysInMonth; d++) {
       final t = s.dayTotals(DateTime(month.year, month.month, d));
       if (t.expense > maxExpense) maxExpense = t.expense;
@@ -408,6 +379,7 @@ class _MonthGrid extends StatelessWidget {
                       ),
                   ],
                 ),
+              const UpcomingRecurringSection(),
             ],
           ),
         );
@@ -421,7 +393,7 @@ class _MonthGrid extends StatelessWidget {
     int day,
     int daysInMonth,
     double h,
-    int maxExpense,
+    BigInt maxExpense,
     DateTime today,
   ) {
     if (day < 1 || day > daysInMonth) return SizedBox(height: h);
@@ -434,12 +406,18 @@ class _MonthGrid extends StatelessWidget {
       maxExpense: maxExpense,
       isToday: sameDay(date, today),
       isSelected: selected != null && sameDay(date, selected!),
-      overBudget: s.dailyBudgetMinor > 0 && totals.expense > s.dailyBudgetMinor,
+      overBudget:
+          s.dailyBudgetMinor > 0 &&
+          totals.expense > BigInt.from(s.dailyBudgetMinor),
       dailyBudgetUsage: s.dailyBudgetMinor > 0
-          ? totals.expense / s.dailyBudgetMinor
+          ? minorRatio(totals.expense, s.dailyBudgetMinor, clamp: false)
           : null,
       monthlyBudgetUsage: s.monthlyBudgetMinor > 0
-          ? s.monthTotals(date.year, date.month).expense / s.monthlyBudgetMinor
+          ? minorRatio(
+              s.monthTotals(date.year, date.month).expense,
+              s.monthlyBudgetMinor,
+              clamp: false,
+            )
           : null,
       money: s.money,
       onTap: () => onTap(date),
@@ -465,7 +443,7 @@ class _DayCell extends StatelessWidget {
   final int day;
   final double height;
   final Totals totals;
-  final int maxExpense;
+  final BigInt maxExpense;
   final bool isToday;
   final bool isSelected;
   final bool overBudget;
@@ -477,10 +455,10 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.cs;
-    final hasExp = totals.expense > 0;
-    final hasInc = totals.income > 0;
-    final intensity = (hasExp && maxExpense > 0)
-        ? totals.expense / maxExpense
+    final hasExp = totals.expense > BigInt.zero;
+    final hasInc = totals.income > BigInt.zero;
+    final intensity = (hasExp && maxExpense > BigInt.zero)
+        ? minorRatio(totals.expense, maxExpense)
         : 0.0;
 
     Color bg = Colors.transparent;
@@ -503,7 +481,7 @@ class _DayCell extends StatelessWidget {
         height: height - 4,
         child: Material(
           color: bg,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(Brand.controlRadius),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: () {
@@ -512,7 +490,7 @@ class _DayCell extends StatelessWidget {
             },
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(Brand.controlRadius),
                 border: border,
               ),
               padding: const EdgeInsets.fromLTRB(5, 5, 5, 3),
@@ -551,21 +529,6 @@ class _DayCell extends StatelessWidget {
                     ],
                   ),
                   const Spacer(),
-                  if (hasExp)
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        money.compact(totals.expense),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: context.isDark
-                              ? const Color(0xFFFF8FA3)
-                              : const Color(0xFFD62F4E),
-                        ),
-                      ),
-                    ),
                   if (hasInc)
                     FittedBox(
                       fit: BoxFit.scaleDown,
@@ -578,6 +541,21 @@ class _DayCell extends StatelessWidget {
                           color: context.isDark
                               ? const Color(0xFF5FE3B8)
                               : const Color(0xFF0B8F69),
+                        ),
+                      ),
+                    ),
+                  if (hasExp)
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        money.compact(totals.expense),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: context.isDark
+                              ? const Color(0xFFFF8FA3)
+                              : const Color(0xFFD62F4E),
                         ),
                       ),
                     ),

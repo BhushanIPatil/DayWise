@@ -9,6 +9,7 @@ import '../state/app_state.dart';
 import 'widgets.dart';
 import 'accounts_page.dart';
 import 'date_time_fields.dart';
+import 'transaction_type_toggle.dart';
 
 /// Settings -> Recurring entries: rent, EMI, salary, subscriptions...
 class RecurringPage extends StatelessWidget {
@@ -22,7 +23,7 @@ class RecurringPage extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Stop this rule?'),
+        title: const Text('Delete recurring entry?'),
         content: const Text(
           'Entries it already created stay in your calendar. No new ones will be added.',
         ),
@@ -34,7 +35,7 @@ class RecurringPage extends StatelessWidget {
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Brand.expense),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Stop rule'),
+            child: const Text('Delete rule'),
           ),
         ],
       ),
@@ -82,20 +83,18 @@ class RecurringPage extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
                         child: Row(
                           children: [
-                            CategoryBubble(
-                              category: s.categoryById(r.categoryId),
-                            ),
-                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  TransactionTypeBadge(type: r.type),
+                                  const SizedBox(height: 6),
                                   Text(
                                     r.note.isNotEmpty
                                         ? r.note
-                                        : s.categoryById(r.categoryId).name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                        : (r.type == TxType.income
+                                              ? 'Income'
+                                              : 'Expense'),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 15,
@@ -109,12 +108,32 @@ class RecurringPage extends StatelessWidget {
                                       color: context.cs.onSurfaceVariant,
                                     ),
                                   ),
-                                  Text(
-                                    '${s.accountById(r.accountId).name} · ${TimeOfDay(hour: r.timeMinutes ~/ 60, minute: r.timeMinutes % 60).format(context)}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: context.cs.onSurfaceVariant,
-                                    ),
+                                  const SizedBox(height: 6),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 6,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    children: [
+                                      AccountBadge(
+                                        account: s.accountById(r.accountId),
+                                      ),
+                                      Text(
+                                        fmtTime(
+                                          DateTime(
+                                            2000,
+                                            1,
+                                            1,
+                                            r.timeMinutes ~/ 60,
+                                            r.timeMinutes % 60,
+                                          ),
+                                        ),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: context.cs.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   Builder(
                                     builder: (context) {
@@ -147,10 +166,28 @@ class RecurringPage extends StatelessWidget {
                                     : Brand.expense,
                               ),
                             ),
-                            IconButton(
-                              tooltip: 'Stop rule',
-                              icon: const Icon(Icons.delete_outline_rounded),
-                              onPressed: () => _confirmDelete(context, s, r),
+                            PopupMenuButton<String>(
+                              tooltip: 'Recurring entry options',
+                              onSelected: (action) {
+                                if (action == 'edit') {
+                                  showRuleEditor(context, edit: r);
+                                } else {
+                                  _confirmDelete(context, s, r);
+                                }
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit rule'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text(
+                                    'Delete rule',
+                                    style: TextStyle(color: Brand.expense),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -163,26 +200,22 @@ class RecurringPage extends StatelessWidget {
   }
 }
 
-Future<bool?> showRuleEditor(BuildContext context) {
-  return showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => const _RuleEditor(),
-  );
+Future<bool?> showRuleEditor(BuildContext context, {RecurringRule? edit}) {
+  return Navigator.of(
+    context,
+  ).push<bool>(MaterialPageRoute(builder: (_) => _RuleEditor(edit: edit)));
 }
 
 class _RuleEditor extends StatefulWidget {
-  const _RuleEditor();
+  const _RuleEditor({this.edit});
+  final RecurringRule? edit;
 
   @override
   State<_RuleEditor> createState() => _RuleEditorState();
 }
 
 class _RuleEditorState extends State<_RuleEditor> {
-  TxType _type = TxType.expense;
-  String? _catId;
+  TxType _type = TxType.income;
   Frequency _freq = Frequency.monthly;
   DateTime _start = dateOnly(DateTime.now());
   DateTime? _end;
@@ -190,6 +223,22 @@ class _RuleEditorState extends State<_RuleEditor> {
   int _timeMinutes = DateTime.now().hour * 60 + DateTime.now().minute;
   final TextEditingController _amount = TextEditingController();
   final TextEditingController _note = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final old = widget.edit;
+    if (old == null) return;
+    _type = old.type;
+    _freq = old.frequency;
+    _start = old.startDate;
+    _end = old.endDate;
+    _accountId = old.accountId;
+    _timeMinutes = old.timeMinutes;
+    _amount.text = minorToInput(old.amountMinor);
+    _note.text = old.note;
+  }
 
   @override
   void dispose() {
@@ -206,237 +255,227 @@ class _RuleEditorState extends State<_RuleEditor> {
       lastDate: DateTime(2100, 12, 31),
       helpText: 'Last date',
     );
-    if (d != null) setState(() => _end = dateOnly(d));
+    if (d != null && mounted) setState(() => _end = dateOnly(d));
   }
 
   Future<void> _save() async {
     final minor = parseMinor(_amount.text.trim());
-    if (minor <= 0) return;
+    if (minor <= BigInt.zero || _saving) return;
+    setState(() => _saving = true);
     final s = AppScope.read(context);
-    final cats = s.categoriesFor(_type);
-    final catId = (_catId != null && cats.any((c) => c.id == _catId))
-        ? _catId!
-        : cats.first.id;
     final rule = RecurringRule(
+      id: widget.edit?.id,
+      categoryId: widget.edit?.categoryId ?? '',
+      lastGenerated: widget.edit?.lastGenerated,
       type: _type,
       amountMinor: minor,
-      categoryId: catId,
-      accountId: _accountId ?? s.selectedAccountId ?? kDefaultAccountId,
+      accountId: _accountId ?? s.selectedAccountId ?? s.defaultAccount.id,
       timeMinutes: _timeMinutes,
       note: _note.text.trim(),
       frequency: _freq,
       startDate: _start,
       endDate: _end,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
+      createdAt:
+          widget.edit?.createdAt ?? DateTime.now().millisecondsSinceEpoch,
     );
-    await s.addRule(rule);
-    if (mounted) Navigator.of(context).pop(true);
+    try {
+      if (widget.edit == null) {
+        await s.addRule(rule);
+      } else {
+        await s.updateRule(rule);
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _saving = false);
+        showSnack(
+          context,
+          'Could not save the recurring entry. Please try again.',
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    final cats = s.categoriesFor(_type);
-    final selectedId = (_catId != null && cats.any((c) => c.id == _catId))
-        ? _catId
-        : cats.first.id;
-    final canSave = parseMinor(_amount.text.trim()) > 0;
+    final canSave = !_saving && parseMinor(_amount.text.trim()) > BigInt.zero;
+    final accent = _type == TxType.expense ? Brand.expense : Brand.income;
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.94,
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          widget.edit == null ? 'New recurring entry' : 'Edit recurring entry',
+        ),
       ),
-      decoration: BoxDecoration(
-        color: context.cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: context.cs.outlineVariant,
-                  borderRadius: BorderRadius.circular(4),
-                ),
+      body: SafeArea(
+        bottom: false,
+        child: PinnedForm(
+          expand: true,
+          action: SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton(
+              onPressed: canSave ? _save : null,
+              child: const Text(
+                'Save rule',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
               ),
             ),
-            const SizedBox(height: 14),
-            const Text(
-              'New recurring entry',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<TxType>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: TxType.expense, label: Text('Expense')),
-                  ButtonSegment(value: TxType.income, label: Text('Income')),
-                ],
-                selected: {_type},
-                onSelectionChanged: (v) => setState(() {
-                  _type = v.first;
-                  _catId = null;
+          ),
+          contentPadding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AccountField(
+                value: _accountId ?? s.selectedAccountId ?? s.defaultAccount.id,
+                onChanged: (id) => setState(() => _accountId = id),
+              ),
+              const SizedBox(height: 12),
+              TransactionTypeToggle(
+                value: _type,
+                onChanged: (type) => setState(() => _type = type),
+              ),
+              const SizedBox(height: 12),
+              EntryDateTimeFields(
+                value: DateTime(
+                  _start.year,
+                  _start.month,
+                  _start.day,
+                  _timeMinutes ~/ 60,
+                  _timeMinutes % 60,
+                ),
+                onChanged: (date) => setState(() {
+                  _start = dateOnly(date);
+                  _timeMinutes = date.hour * 60 + date.minute;
+                  if (_end != null && _end!.isBefore(_start)) _end = null;
                 }),
               ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-              ],
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: 'Amount',
-                prefixIcon: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Text(
-                    s.money.symbol.trim(),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                    ),
-                  ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('recurring-amount'),
+                controller: _amount,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
                 ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            AccountField(
-              value: _accountId ?? s.selectedAccountId ?? kDefaultAccountId,
-              onChanged: (id) => setState(() => _accountId = id),
-            ),
-            const SizedBox(height: 12),
-            EntryDateTimeFields(
-              value: DateTime(
-                _start.year,
-                _start.month,
-                _start.day,
-                _timeMinutes ~/ 60,
-                _timeMinutes % 60,
-              ),
-              onChanged: (date) => setState(() {
-                _start = dateOnly(date);
-                _timeMinutes = date.hour * 60 + date.minute;
-                if (_end != null && _end!.isBefore(_start)) _end = null;
-              }),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _note,
-              maxLength: 60,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'Name, e.g. House rent (optional)',
-                counterText: '',
-                prefixIcon: Icon(Icons.edit_note_rounded),
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'Category',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final c in cats)
-                  ChoiceChip(
-                    avatar: Icon(c.iconData, size: 18, color: c.colorValue),
-                    label: Text(c.name),
-                    selected: c.id == selectedId,
-                    onSelected: (_) => setState(() => _catId = c.id),
+                textInputAction: TextInputAction.done,
+                inputFormatters: [
+                  TextInputFormatter.withFunction(
+                    (old, value) =>
+                        RegExp(r'^\d*(\.\d{0,2})?$').hasMatch(value.text)
+                        ? value
+                        : old,
                   ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Repeats',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<Frequency>(
-                showSelectedIcon: false,
-                segments: [
-                  for (final f in Frequency.values)
-                    ButtonSegment(value: f, label: Text(frequencyLabel(f))),
                 ],
-                selected: {_freq},
-                onSelectionChanged: (v) => setState(() => _freq = v.first),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _pickEnd,
-                    onLongPress: () => setState(() => _end = null),
-                    icon: const Icon(Icons.event_busy_rounded, size: 18),
-                    label: Text(
-                      _end == null
-                          ? 'No end date'
-                          : 'Until ${fmtShort(_end!)} ${_end!.year}',
-                    ),
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(
+                  fontSize: 38,
+                  fontWeight: FontWeight.w800,
+                  color: accent,
+                  letterSpacing: -1,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Amount',
+                  hintText: 'Amount',
+                  hintStyle: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0,
+                  ),
+                  prefixText: s.money.symbol,
+                  prefixStyle: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              describeRule(
-                RecurringRule(
-                  type: _type,
-                  amountMinor: 1,
-                  categoryId: '',
-                  frequency: _freq,
-                  startDate: _start,
-                  createdAt: 0,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _note,
+                minLines: 1,
+                maxLines: null,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Note [Optional]',
+                  hintText: 'Note [Optional]',
+                  counterText: '',
+                  prefixIcon: Icon(Icons.edit_note_rounded),
                 ),
               ),
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: context.cs.primary,
+              const SizedBox(height: 14),
+              const Text(
+                'Repeats',
+                style: TextStyle(fontWeight: FontWeight.w800),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Entries are created for every due date from the start date up to today, then automatically each time a date arrives '
-              '(when you open the app). You can still edit or delete any single entry. Long-press "No end date" to clear an end date.',
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.4,
-                color: context.cs.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: canSave ? _save : null,
-                child: const Text(
-                  'Save rule',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<Frequency>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final f in Frequency.values)
+                      ButtonSegment(value: f, label: Text(frequencyLabel(f))),
+                  ],
+                  selected: {_freq},
+                  onSelectionChanged: (v) => setState(() => _freq = v.first),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickEnd,
+                      icon: const Icon(Icons.event_busy_rounded, size: 18),
+                      label: Text(
+                        _end == null
+                            ? 'No end date'
+                            : 'Until ${fmtShort(_end!)} ${_end!.year}',
+                      ),
+                    ),
+                  ),
+                  if (_end != null) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Remove end date',
+                      onPressed: () => setState(() => _end = null),
+                      icon: const Icon(Icons.clear_rounded),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                describeRule(
+                  RecurringRule(
+                    type: _type,
+                    amountMinor: 1,
+                    frequency: _freq,
+                    startDate: _start,
+                    createdAt: 0,
+                  ),
+                ),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: context.cs.primary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.edit != null
+                    ? 'Changes apply to unrecorded and future occurrences. Existing income and expense records are kept.'
+                    : 'Entries are created for every due date from the start date up to today, then automatically each time a date arrives '
+                          '(when you open the app). You can still edit or delete any single entry.',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.4,
+                  color: context.cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

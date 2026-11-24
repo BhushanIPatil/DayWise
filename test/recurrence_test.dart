@@ -11,8 +11,14 @@ void main() {
       expect(occurrence(start, Frequency.monthly, 2), DateTime(2026, 3, 31));
       expect(occurrence(start, Frequency.monthly, 3), DateTime(2026, 4, 30));
       expect(occurrence(start, Frequency.monthly, 12), DateTime(2027, 1, 31));
-      expect(occurrence(DateTime(2027, 1, 31), Frequency.monthly, 1), DateTime(2027, 2, 28));
-      expect(occurrence(DateTime(2028, 1, 31), Frequency.monthly, 1), DateTime(2028, 2, 29));
+      expect(
+        occurrence(DateTime(2027, 1, 31), Frequency.monthly, 1),
+        DateTime(2027, 2, 28),
+      );
+      expect(
+        occurrence(DateTime(2028, 1, 31), Frequency.monthly, 1),
+        DateTime(2028, 2, 29),
+      );
     });
 
     test('yearly handles 29 Feb', () {
@@ -22,8 +28,14 @@ void main() {
     });
 
     test('daily and weekly cross month ends', () {
-      expect(occurrence(DateTime(2026, 1, 30), Frequency.daily, 3), DateTime(2026, 2, 2));
-      expect(occurrence(DateTime(2026, 10, 26), Frequency.weekly, 2), DateTime(2026, 11, 9));
+      expect(
+        occurrence(DateTime(2026, 1, 30), Frequency.daily, 3),
+        DateTime(2026, 2, 2),
+      );
+      expect(
+        occurrence(DateTime(2026, 10, 26), Frequency.weekly, 2),
+        DateTime(2026, 11, 9),
+      );
     });
   });
 
@@ -31,8 +43,16 @@ void main() {
     final today = DateTime(2026, 4, 10);
 
     test('back-fills from the start date up to today', () {
-      final d = dueDates(start: DateTime(2026, 1, 15), freq: Frequency.monthly, today: today);
-      expect(d, [DateTime(2026, 1, 15), DateTime(2026, 2, 15), DateTime(2026, 3, 15)]);
+      final d = dueDates(
+        start: DateTime(2026, 1, 15),
+        freq: Frequency.monthly,
+        today: today,
+      );
+      expect(d, [
+        DateTime(2026, 1, 15),
+        DateTime(2026, 2, 15),
+        DateTime(2026, 3, 15),
+      ]);
     });
 
     test('skips what was already generated', () {
@@ -46,11 +66,20 @@ void main() {
     });
 
     test('nothing when the start is in the future', () {
-      expect(dueDates(start: DateTime(2026, 5, 1), freq: Frequency.daily, today: today), isEmpty);
+      expect(
+        dueDates(
+          start: DateTime(2026, 5, 1),
+          freq: Frequency.daily,
+          today: today,
+        ),
+        isEmpty,
+      );
     });
 
     test('includes today', () {
-      expect(dueDates(start: today, freq: Frequency.daily, today: today), [today]);
+      expect(dueDates(start: today, freq: Frequency.daily, today: today), [
+        today,
+      ]);
     });
 
     test('respects the end date', () {
@@ -64,7 +93,12 @@ void main() {
     });
 
     test('is capped', () {
-      final d = dueDates(start: DateTime(2000, 1, 1), freq: Frequency.daily, today: today, cap: 50);
+      final d = dueDates(
+        start: DateTime(2000, 1, 1),
+        freq: Frequency.daily,
+        today: today,
+        cap: 50,
+      );
       expect(d.length, 50);
     });
   });
@@ -86,7 +120,7 @@ void main() {
     test('map round trip', () {
       final back = RecurringRule.fromMap(rule.toMap());
       expect(back.id, 3);
-      expect(back.amountMinor, 1500000);
+      expect(back.amountMinor, BigInt.from(1500000));
       expect(back.frequency, Frequency.monthly);
       expect(back.startDate, DateTime(2026, 1, 1));
       expect(back.endDate, DateTime(2026, 12, 1));
@@ -96,13 +130,13 @@ void main() {
     test('describe', () {
       expect(describeRule(rule), 'Monthly on the 1st');
       RecurringRule monthlyOn(int day) => RecurringRule(
-            type: TxType.expense,
-            amountMinor: 1,
-            categoryId: 'x',
-            frequency: Frequency.monthly,
-            startDate: DateTime(2026, 1, day),
-            createdAt: 0,
-          );
+        type: TxType.expense,
+        amountMinor: 1,
+        categoryId: 'x',
+        frequency: Frequency.monthly,
+        startDate: DateTime(2026, 1, day),
+        createdAt: 0,
+      );
       expect(describeRule(monthlyOn(2)), 'Monthly on the 2nd');
       expect(describeRule(monthlyOn(3)), 'Monthly on the 3rd');
       expect(describeRule(monthlyOn(11)), 'Monthly on the 11th');

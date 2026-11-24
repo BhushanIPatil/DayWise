@@ -2,6 +2,8 @@
 class AppInfo {
   static const String name = 'DayWise';
   static const String tagline = 'Your money, in balance';
+  static const String helpUrl =
+      'https://sites.google.com/view/daywisetracker/help?authuser=0';
   static const String termsUrl =
       'https://sites.google.com/view/daywisetracker/terms-of-use?authuser=0';
   static const String privacyUrl =

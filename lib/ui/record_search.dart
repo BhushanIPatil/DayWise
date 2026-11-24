@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../state/app_state.dart';
 import 'entry_sheet.dart';
 import 'widgets.dart';
+import 'record_view_options.dart';
 
 class InlineRecordSearch extends StatelessWidget {
   const InlineRecordSearch({
@@ -24,7 +25,8 @@ class InlineRecordSearch extends StatelessWidget {
       autofocus: true,
       onChanged: onChanged,
       decoration: InputDecoration(
-        hintText: 'Search notes, categories, amounts',
+        labelText: 'Search records',
+        hintText: 'Search records',
         prefixIcon: const Icon(Icons.search_rounded),
         suffixIcon: IconButton(
           tooltip: 'Close search',
@@ -37,13 +39,25 @@ class InlineRecordSearch extends StatelessWidget {
 }
 
 class RecordSearchResults extends StatelessWidget {
-  const RecordSearchResults({super.key, required this.query});
+  const RecordSearchResults({
+    super.key,
+    required this.query,
+    this.from,
+    this.to,
+    this.options,
+  });
   final String query;
+  final DateTime? from;
+  final DateTime? to;
+  final RecordViewOptions? options;
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    final results = s.search(query, limit: s.all.length);
+    final inRange = s.recordsInRange(from, to).toSet();
+    final results = (options ?? RecordViewOptions()).apply(
+      s.search(query, limit: s.all.length).where((t) => inRange.contains(t)),
+    );
     return Material(
       color: Theme.of(context).colorScheme.surface,
       child: results.isEmpty

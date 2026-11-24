@@ -7,6 +7,8 @@ import '../data/models.dart';
 import '../state/app_state.dart';
 import 'widgets.dart';
 import 'entry_sheet.dart';
+import 'transaction_list.dart';
+import 'date_time_fields.dart';
 
 /// The same account control is used when recording entries and recurring rules.
 class AccountField extends StatelessWidget {
@@ -27,7 +29,7 @@ class AccountField extends StatelessWidget {
           value: value,
           isExpanded: true,
           isDense: true,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(Brand.controlRadius),
           items: [
             for (final a in s.accounts)
               DropdownMenuItem(
@@ -54,8 +56,9 @@ class AccountField extends StatelessWidget {
 }
 
 class AccountSwitcher extends StatelessWidget {
-  const AccountSwitcher({super.key, this.viewToggle});
+  const AccountSwitcher({super.key, this.viewToggle, this.actions});
   final Widget? viewToggle;
+  final Widget? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +78,7 @@ class AccountSwitcher extends StatelessWidget {
               child: DropdownButton<String>(
                 value: s.selectedAccountId ?? '',
                 isExpanded: true,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(Brand.controlRadius),
                 style: context.tt.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -107,14 +110,8 @@ class AccountSwitcher extends StatelessWidget {
               ),
             ),
           ),
-          IconButton(
-            tooltip: 'Manage accounts',
-            icon: const Icon(Icons.tune_rounded, size: 21),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const AccountsPage()),
-            ),
-          ),
           ?viewToggle,
+          ?actions,
         ],
       ),
     );
@@ -124,11 +121,71 @@ class AccountSwitcher extends StatelessWidget {
 class AccountsPage extends StatelessWidget {
   const AccountsPage({super.key});
 
+  Future<void> _confirmDelete(
+    BuildContext context,
+    MoneyAccount account,
+  ) async {
+    final s = AppScope.read(context);
+    if (s.accounts.length <= 1) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Keep at least one account'),
+          content: const Text(
+            'Add another account before deleting this one so you can continue recording income and expenses.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    final records = s.transactionsForAccount(account.id).length;
+    final rules = s.rules.where((rule) => rule.accountId == account.id).length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${account.name}?'),
+        content: Text(
+          'This permanently deletes this account'
+          '${account.openingBalanceMinor != BigInt.zero ? ', its opening balance of ${s.money.full(account.openingBalanceMinor)}' : ''}, '
+          '$records income and expense ${records == 1 ? 'record' : 'records'}, and '
+          '$rules recurring ${rules == 1 ? 'rule' : 'rules'}.\n\n'
+          'Your totals will update. This cannot be undone. Save a backup first if you may need this data.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Brand.expense),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete account'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await s.deleteAccount(account.id);
+      if (context.mounted) showSnack(context, '${account.name} deleted.');
+    } catch (_) {
+      if (context.mounted) {
+        showSnack(context, 'Could not delete this account. Please try again.');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    final total = s.accounts.fold<int>(
-      0,
+    final total = s.accounts.fold<BigInt>(
+      BigInt.zero,
       (sum, a) => sum + s.accountBalance(a.id),
     );
     return Scaffold(
@@ -207,10 +264,28 @@ class AccountsPage extends StatelessWidget {
                               ),
                             ),
                           ),
-                          Icon(
-                            Icons.edit_outlined,
-                            size: 19,
-                            color: context.cs.onSurfaceVariant,
+                          PopupMenuButton<String>(
+                            tooltip: 'Options for ${a.name}',
+                            onSelected: (action) {
+                              if (action == 'edit') {
+                                showAccountEditor(context, account: a);
+                              } else {
+                                _confirmDelete(context, a);
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Edit account'),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text(
+                                  'Delete account',
+                                  style: TextStyle(color: Brand.expense),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -243,14 +318,16 @@ class AccountsPage extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Opening balance ${s.money.full(a.openingBalanceMinor)}',
-                        style: TextStyle(
-                          color: context.cs.onSurfaceVariant,
-                          fontSize: 12,
+                      if (a.openingBalanceMinor != BigInt.zero)
+                        const SizedBox(height: 8),
+                      if (a.openingBalanceMinor != BigInt.zero)
+                        Text(
+                          'Opening balance ${s.money.full(a.openingBalanceMinor)}',
+                          style: TextStyle(
+                            color: context.cs.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
                       const SizedBox(height: 14),
                       TextButton.icon(
                         onPressed: () => Navigator.of(context).push(
@@ -301,44 +378,134 @@ class _AccountActivity extends StatelessWidget {
       body: Stack(
         children: [
           const AppBackground(),
-          ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+          TransactionList(
+            entries: entries,
+            bottomPadding: 100,
+            header: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: _AccountActivitySummary(account: account),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountActivitySummary extends StatelessWidget {
+  const _AccountActivitySummary({required this.account});
+  final MoneyAccount account;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final totals = s.accountTotals(account.id);
+    final balance = s.accountBalance(account.id);
+    final balanceColor = balance < BigInt.zero
+        ? Brand.expense
+        : context.cs.primary;
+    Widget metric(String label, BigInt value, Color color, String key) =>
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: tint(color, 0.09),
+              borderRadius: BorderRadius.circular(Brand.controlRadius),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    s.money.full(value),
+                    key: ValueKey(key),
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+    return GlassCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Balance',
-                      style: TextStyle(color: context.cs.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      s.money.full(s.accountBalance(accountId)),
-                      style: const TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                size: 20,
+                color: balanceColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Balance',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: context.cs.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 20),
-              if (entries.isEmpty)
-                const EmptyState(
-                  icon: Icons.receipt_long_rounded,
-                  title: 'A fresh start',
-                  subtitle:
-                      'Add your first income or expense for this account.',
-                ),
-              for (final entry in entries)
-                EntryTile(
-                  txn: entry,
-                  showDate: true,
-                  onTap: () => showEntrySheet(context, edit: entry),
-                ),
             ],
           ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              s.money.full(balance),
+              key: const ValueKey('account-activity-balance'),
+              style: TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.w800,
+                color: balanceColor,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              metric(
+                'Income',
+                totals.income,
+                Brand.income,
+                'account-activity-income',
+              ),
+              const SizedBox(width: 12),
+              metric(
+                'Expenses',
+                totals.expense,
+                Brand.expense,
+                'account-activity-expenses',
+              ),
+            ],
+          ),
+          if (account.openingBalanceMinor != BigInt.zero)
+            const SizedBox(height: 12),
+          if (account.openingBalanceMinor != BigInt.zero)
+            Text(
+              'Opening balance ${s.money.full(account.openingBalanceMinor)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: context.cs.onSurfaceVariant,
+              ),
+            ),
         ],
       ),
     );
@@ -367,6 +534,7 @@ class _AccountEditorState extends State<_AccountEditor> {
   late final TextEditingController _name;
   late final TextEditingController _balance;
   late int _color;
+  late DateTime _openingDate;
   bool _saving = false;
   String? _error;
 
@@ -375,13 +543,15 @@ class _AccountEditorState extends State<_AccountEditor> {
     super.initState();
     final a = widget.account;
     _name = TextEditingController(text: a?.name ?? '');
-    final opening = a?.openingBalanceMinor ?? 0;
+    final opening = a?.openingBalanceMinor ?? BigInt.zero;
     _balance = TextEditingController(
-      text: opening == 0
+      text: opening == BigInt.zero
           ? ''
-          : '${opening < 0 ? '-' : ''}${minorToInput(opening.abs())}',
+          : '${opening < BigInt.zero ? '-' : ''}${minorToInput(opening.abs())}',
     );
     _color = a?.color ?? Brand.accents.first.toARGB32();
+    final now = DateTime.now();
+    _openingDate = DateTime(now.year, now.month, now.day, now.hour, now.minute);
   }
 
   @override
@@ -399,7 +569,8 @@ class _AccountEditorState extends State<_AccountEditor> {
     });
     final raw = _balance.text.trim();
     final balance =
-        parseMinor(raw.replaceFirst('-', '')) * (raw.startsWith('-') ? -1 : 1);
+        parseMinor(raw.replaceFirst('-', '')) *
+        BigInt.from(raw.startsWith('-') ? -1 : 1);
     final account = MoneyAccount(
       id:
           widget.account?.id ??
@@ -409,8 +580,15 @@ class _AccountEditorState extends State<_AccountEditor> {
       color: _color,
     );
     try {
-      await AppScope.read(context).saveAccount(account);
-      if (mounted) Navigator.pop(context, account);
+      final s = AppScope.read(context);
+      MoneyAccount saved;
+      if (widget.account == null) {
+        saved = await s.createAccount(account, openingDate: _openingDate);
+      } else {
+        await s.saveAccount(account);
+        saved = s.accountById(account.id);
+      }
+      if (mounted) Navigator.pop(context, saved);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -429,10 +607,20 @@ class _AccountEditorState extends State<_AccountEditor> {
     child: Container(
       decoration: BoxDecoration(
         color: context.cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(Brand.sheetRadius),
+        ),
       ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+      child: PinnedForm(
+        action: SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: FilledButton(
+            onPressed: _saving ? null : _save,
+            child: Text(_saving ? 'Saving…' : 'Save account'),
+          ),
+        ),
+        contentPadding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -453,31 +641,52 @@ class _AccountEditorState extends State<_AccountEditor> {
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Account name',
-                hintText: 'e.g. HDFC Savings',
+                hintText: 'Account name',
                 prefixIcon: Icon(Icons.account_balance_rounded),
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _balance,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-                signed: true,
+            if (widget.account == null ||
+                widget.account!.openingBalanceMinor != BigInt.zero) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _balance,
+                onChanged: (_) => setState(() {}),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                  signed: true,
+                ),
+                inputFormatters: [
+                  TextInputFormatter.withFunction(
+                    (old, value) =>
+                        RegExp(r'^-?\d*(\.\d{0,2})?$').hasMatch(value.text)
+                        ? value
+                        : old,
+                  ),
+                ],
+                decoration: InputDecoration(
+                  labelText: 'Opening balance',
+                  hintText: 'Opening balance [Optional]',
+                  prefixText: '${AppScope.of(context).money.symbol} ',
+                  helperText:
+                      widget.account == null &&
+                          parseMinor(_balance.text.replaceFirst('-', '')) >
+                              BigInt.zero
+                      ? (_balance.text.startsWith('-')
+                            ? 'Saved as an expense record.'
+                            : 'Saved as an income record.')
+                      : null,
+                ),
               ),
-              inputFormatters: [
-                TextInputFormatter.withFunction(
-                  (old, value) =>
-                      RegExp(r'^-?\d{0,9}(\.\d{0,2})?$').hasMatch(value.text)
-                      ? value
-                      : old,
+              if (widget.account == null &&
+                  parseMinor(_balance.text.replaceFirst('-', '')) >
+                      BigInt.zero) ...[
+                const SizedBox(height: 16),
+                EntryDateTimeFields(
+                  value: _openingDate,
+                  onChanged: (date) => setState(() => _openingDate = date),
                 ),
               ],
-              decoration: InputDecoration(
-                labelText: 'Opening balance',
-                hintText: '0',
-                prefixText: '${AppScope.of(context).money.symbol} ',
-              ),
-            ),
+            ],
             const SizedBox(height: 16),
             Wrap(
               spacing: 10,
@@ -507,15 +716,6 @@ class _AccountEditorState extends State<_AccountEditor> {
                   style: const TextStyle(color: Brand.expense),
                 ),
               ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                child: Text(_saving ? 'Saving…' : 'Save account'),
-              ),
-            ),
           ],
         ),
       ),

@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 import '../core/format.dart';
 
 enum TxType { expense, income }
@@ -10,26 +8,27 @@ class MoneyAccount {
   const MoneyAccount({
     required this.id,
     required this.name,
-    this.openingBalanceMinor = 0,
+    Object openingBalanceMinor = 0,
     this.color = 0xFF6C5CE7,
-  });
+  }) : _openingBalanceMinor = openingBalanceMinor;
 
   final String id;
   final String name;
-  final int openingBalanceMinor;
+  final Object _openingBalanceMinor;
+  BigInt get openingBalanceMinor => readMinor(_openingBalanceMinor);
   final int color;
 
   Map<String, Object?> toMap() => {
     'id': id,
     'name': name,
-    'opening_balance_minor': openingBalanceMinor,
+    'opening_balance_minor': openingBalanceMinor.toString(),
     'color': color,
   };
 
   factory MoneyAccount.fromMap(Map<String, Object?> m) => MoneyAccount(
     id: m['id'] as String,
     name: m['name'] as String,
-    openingBalanceMinor: (m['opening_balance_minor'] as num?)?.toInt() ?? 0,
+    openingBalanceMinor: readMinor(m['opening_balance_minor'] ?? 0),
     color: (m['color'] as num?)?.toInt() ?? 0xFF6C5CE7,
   );
 }
@@ -39,60 +38,7 @@ const MoneyAccount kDefaultAccount = MoneyAccount(
   name: 'Everyday',
 );
 
-/// Material icons that categories can use. Stored by key so release builds can
-/// tree-shake the icon font (never build IconData from a number at runtime).
-const Map<String, IconData> kCategoryIcons = {
-  'restaurant': Icons.restaurant,
-  'coffee': Icons.coffee,
-  'groceries': Icons.shopping_basket,
-  'car': Icons.directions_car,
-  'fuel': Icons.local_gas_station,
-  'bus': Icons.directions_bus,
-  'shopping': Icons.shopping_bag,
-  'bills': Icons.receipt_long,
-  'home': Icons.home,
-  'health': Icons.medical_services,
-  'fitness': Icons.fitness_center,
-  'movie': Icons.movie,
-  'travel': Icons.flight,
-  'school': Icons.school,
-  'subscriptions': Icons.subscriptions,
-  'gift': Icons.card_giftcard,
-  'pets': Icons.pets,
-  'kids': Icons.child_care,
-  'phone': Icons.phone_android,
-  'wifi': Icons.wifi,
-  'build': Icons.build,
-  'work': Icons.work,
-  'game': Icons.sports_esports,
-  'beauty': Icons.spa,
-  'salary': Icons.payments,
-  'business': Icons.storefront,
-  'laptop': Icons.laptop_mac,
-  'invest': Icons.trending_up,
-  'savings': Icons.savings,
-  'wallet': Icons.account_balance_wallet,
-  'redeem': Icons.redeem,
-  'other': Icons.category,
-};
-
-IconData iconFor(String key) => kCategoryIcons[key] ?? Icons.category;
-
-const List<int> kCategoryColors = [
-  0xFFFF7043,
-  0xFFFF4D6D,
-  0xFFE84393,
-  0xFF9B59B6,
-  0xFF6C5CE7,
-  0xFF3F51B5,
-  0xFF0984E3,
-  0xFF00ACC1,
-  0xFF00B894,
-  0xFF2E9E5B,
-  0xFFFDCB6E,
-  0xFFFD9644,
-];
-
+/// Legacy metadata kept for compatibility with older databases and backups.
 class Category {
   const Category({
     required this.id,
@@ -111,9 +57,6 @@ class Category {
   final TxType type;
   final bool builtin;
   final int sort;
-
-  Color get colorValue => Color(color);
-  IconData get iconData => iconFor(icon);
 
   Map<String, Object?> toMap() => {
     'id': id,
@@ -136,226 +79,36 @@ class Category {
   );
 }
 
-const Category kUncategorised = Category(
-  id: '_none',
-  name: 'Uncategorised',
-  icon: 'other',
-  color: 0xFF90A4AE,
-  type: TxType.expense,
-  builtin: true,
-);
-
-const List<Category> kDefaultCategories = [
-  Category(
-    id: 'food',
-    name: 'Food & Dining',
-    icon: 'restaurant',
-    color: 0xFFFF7043,
-    type: TxType.expense,
-    builtin: true,
-    sort: 0,
-  ),
-  Category(
-    id: 'groceries',
-    name: 'Groceries',
-    icon: 'groceries',
-    color: 0xFF2E9E5B,
-    type: TxType.expense,
-    builtin: true,
-    sort: 1,
-  ),
-  Category(
-    id: 'transport',
-    name: 'Transport',
-    icon: 'car',
-    color: 0xFF0984E3,
-    type: TxType.expense,
-    builtin: true,
-    sort: 2,
-  ),
-  Category(
-    id: 'fuel',
-    name: 'Fuel',
-    icon: 'fuel',
-    color: 0xFFFD9644,
-    type: TxType.expense,
-    builtin: true,
-    sort: 3,
-  ),
-  Category(
-    id: 'shopping',
-    name: 'Shopping',
-    icon: 'shopping',
-    color: 0xFFE84393,
-    type: TxType.expense,
-    builtin: true,
-    sort: 4,
-  ),
-  Category(
-    id: 'bills',
-    name: 'Bills & Utilities',
-    icon: 'bills',
-    color: 0xFF6C5CE7,
-    type: TxType.expense,
-    builtin: true,
-    sort: 5,
-  ),
-  Category(
-    id: 'rent',
-    name: 'Rent & Home',
-    icon: 'home',
-    color: 0xFF3F51B5,
-    type: TxType.expense,
-    builtin: true,
-    sort: 6,
-  ),
-  Category(
-    id: 'health',
-    name: 'Health',
-    icon: 'health',
-    color: 0xFFFF4D6D,
-    type: TxType.expense,
-    builtin: true,
-    sort: 7,
-  ),
-  Category(
-    id: 'entertainment',
-    name: 'Entertainment',
-    icon: 'movie',
-    color: 0xFF9B59B6,
-    type: TxType.expense,
-    builtin: true,
-    sort: 8,
-  ),
-  Category(
-    id: 'travel',
-    name: 'Travel',
-    icon: 'travel',
-    color: 0xFF00ACC1,
-    type: TxType.expense,
-    builtin: true,
-    sort: 9,
-  ),
-  Category(
-    id: 'education',
-    name: 'Education',
-    icon: 'school',
-    color: 0xFF00B894,
-    type: TxType.expense,
-    builtin: true,
-    sort: 10,
-  ),
-  Category(
-    id: 'subscriptions',
-    name: 'Subscriptions',
-    icon: 'subscriptions',
-    color: 0xFFFDCB6E,
-    type: TxType.expense,
-    builtin: true,
-    sort: 11,
-  ),
-  Category(
-    id: 'gifts',
-    name: 'Gifts',
-    icon: 'gift',
-    color: 0xFFFF7675,
-    type: TxType.expense,
-    builtin: true,
-    sort: 12,
-  ),
-  Category(
-    id: 'other_exp',
-    name: 'Other',
-    icon: 'other',
-    color: 0xFF90A4AE,
-    type: TxType.expense,
-    builtin: true,
-    sort: 13,
-  ),
-  Category(
-    id: 'salary',
-    name: 'Salary',
-    icon: 'salary',
-    color: 0xFF12B886,
-    type: TxType.income,
-    builtin: true,
-    sort: 20,
-  ),
-  Category(
-    id: 'business',
-    name: 'Business',
-    icon: 'business',
-    color: 0xFF0984E3,
-    type: TxType.income,
-    builtin: true,
-    sort: 21,
-  ),
-  Category(
-    id: 'freelance',
-    name: 'Freelance',
-    icon: 'laptop',
-    color: 0xFF6C5CE7,
-    type: TxType.income,
-    builtin: true,
-    sort: 22,
-  ),
-  Category(
-    id: 'investment',
-    name: 'Investments',
-    icon: 'invest',
-    color: 0xFF2E9E5B,
-    type: TxType.income,
-    builtin: true,
-    sort: 23,
-  ),
-  Category(
-    id: 'gift_in',
-    name: 'Gifts received',
-    icon: 'redeem',
-    color: 0xFFE84393,
-    type: TxType.income,
-    builtin: true,
-    sort: 24,
-  ),
-  Category(
-    id: 'other_inc',
-    name: 'Other income',
-    icon: 'wallet',
-    color: 0xFF90A4AE,
-    type: TxType.income,
-    builtin: true,
-    sort: 25,
-  ),
-];
-
 class Txn {
   const Txn({
     this.id,
     required this.date,
-    required this.amountMinor,
+    required Object amountMinor,
     required this.type,
-    required this.categoryId,
+    this.categoryId = '',
     this.accountId = kDefaultAccountId,
     this.note = '',
     required this.createdAt,
-  });
+  }) : _amountMinor = amountMinor;
 
   final int? id;
   final DateTime date; // local transaction date and time
-  final int amountMinor; // always positive
+  final Object _amountMinor;
+  BigInt get amountMinor => readMinor(_amountMinor); // always positive
   final TxType type;
+  // Retained only to read and round-trip older databases and backups.
   final String categoryId;
   final String accountId;
   final String note;
   final int createdAt; // epoch millis
 
   bool get isIncome => type == TxType.income;
-  int get signed => isIncome ? amountMinor : -amountMinor;
+  BigInt get signed => isIncome ? amountMinor : -amountMinor;
 
   Txn copyWith({
     int? id,
     DateTime? date,
-    int? amountMinor,
+    Object? amountMinor,
     TxType? type,
     String? categoryId,
     String? note,
@@ -376,7 +129,7 @@ class Txn {
     'date': dateKey(date),
     'occurred_at': date.toIso8601String(),
     'account_id': accountId,
-    'amount_minor': amountMinor,
+    'amount_minor': amountMinor.toString(),
     'type': type.index,
     'category_id': categoryId,
     'note': note,
@@ -389,22 +142,26 @@ class Txn {
         ? parseKey(m['date'] as String)
         : DateTime.parse(m['occurred_at'] as String),
     accountId: (m['account_id'] as String?) ?? kDefaultAccountId,
-    amountMinor: (m['amount_minor'] as num).toInt(),
+    amountMinor: readMinor(m['amount_minor']!),
     type: (m['type'] as num).toInt() == 1 ? TxType.income : TxType.expense,
-    categoryId: m['category_id'] as String,
+    categoryId: (m['category_id'] as String?) ?? '',
     note: (m['note'] as String?) ?? '',
     createdAt: (m['created_at'] as num).toInt(),
   );
 }
 
 class Totals {
-  const Totals(this.income, this.expense);
-  final int income;
-  final int expense;
+  const Totals(Object income, Object expense)
+    : _income = income,
+      _expense = expense;
+  final Object _income;
+  final Object _expense;
+  BigInt get income => readMinor(_income);
+  BigInt get expense => readMinor(_expense);
   static const Totals zero = Totals(0, 0);
 
-  int get net => income - expense;
-  bool get isEmpty => income == 0 && expense == 0;
+  BigInt get net => income - expense;
+  bool get isEmpty => income == BigInt.zero && expense == BigInt.zero;
 
   Totals operator +(Totals o) => Totals(income + o.income, expense + o.expense);
 }

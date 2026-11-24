@@ -1,7 +1,9 @@
+import 'fixtures/legacy_categories.dart';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:daywise/data/backup.dart';
+import 'package:daywise/data/budget.dart';
 import 'package:daywise/data/database_backup.dart';
 import 'package:daywise/data/models.dart';
 import 'package:daywise/data/recurrence.dart';
@@ -26,7 +28,7 @@ void main() {
         txns: [
           Txn(
             date: occurred,
-            amountMinor: 12450,
+            amountMinor: '123456789012345678901234567890123450',
             type: TxType.expense,
             categoryId: 'food',
             accountId: 'bank',
@@ -61,6 +63,9 @@ void main() {
         currency: 'USD',
         monthlyBudgetMinor: 100000,
         dailyBudgetMinor: 20000,
+        accountBudgets: const {
+          'bank': AccountBudget(monthlyMinor: 100000, dailyMinor: 20000),
+        },
       );
       await DatabaseBackup.write(path, data, factory: databaseFactoryFfi);
       final bytes = await File(path).readAsBytes();
@@ -70,16 +75,21 @@ void main() {
         factory: databaseFactoryFfi,
       );
       expect(restored.txns.single.date, occurred);
-      expect(restored.txns.single.amountMinor, 12450);
+      expect(
+        restored.txns.single.amountMinor,
+        BigInt.parse('123456789012345678901234567890123450'),
+      );
       expect(restored.txns.single.note, 'Lunch, with friends');
       expect(restored.txns.single.accountId, 'bank');
       expect(restored.txns.single.createdAt, 123);
-      expect(restored.accounts.last.openingBalanceMinor, 500000);
+      expect(restored.accounts.last.openingBalanceMinor, BigInt.from(500000));
       expect(restored.rules.single.timeMinutes, 540);
       expect(restored.rules.single.lastGenerated, DateTime(2026, 11, 1));
       expect(restored.currency, 'USD');
       expect(restored.monthlyBudgetMinor, 100000);
       expect(restored.dailyBudgetMinor, 20000);
+      expect(restored.accountBudgets!['bank']!.monthlyMinor, 100000);
+      expect(restored.accountBudgets!['bank']!.dailyMinor, 20000);
     },
   );
 

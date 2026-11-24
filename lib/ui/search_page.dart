@@ -5,7 +5,7 @@ import '../state/app_state.dart';
 import 'entry_sheet.dart';
 import 'widgets.dart';
 
-/// Search notes, category names and amounts across all time.
+/// Search notes, accounts and amounts across all time.
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
 
@@ -35,7 +35,8 @@ class _SearchPageState extends State<SearchPage> {
           autofocus: true,
           onChanged: (v) => setState(() => _q = v),
           decoration: InputDecoration(
-            hintText: 'Search notes, categories, amounts',
+            labelText: 'Search records',
+            hintText: 'Search records',
             prefixIcon: const Icon(Icons.search_rounded),
             suffixIcon: _q.isEmpty
                 ? null
@@ -57,11 +58,17 @@ class _SearchPageState extends State<SearchPage> {
               child: EmptyState(
                 icon: Icons.manage_search_rounded,
                 title: 'Find any entry',
-                subtitle: 'Type a word from a note, a category name or an amount.',
+                subtitle:
+                    'Type a word from a note, an account name or an amount.',
               ),
             )
           else if (results.isEmpty)
-            const Center(child: EmptyState(icon: Icons.search_off_rounded, title: 'No matches'))
+            const Center(
+              child: EmptyState(
+                icon: Icons.search_off_rounded,
+                title: 'No matches',
+              ),
+            )
           else
             ListView.builder(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),

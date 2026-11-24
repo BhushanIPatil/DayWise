@@ -4,12 +4,18 @@ import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
+import '../data/models.dart';
 import '../state/app_state.dart';
-import 'day_sheet.dart';
+import 'day_page.dart';
 import 'widgets.dart';
+import 'accounts_page.dart';
+import 'report_period.dart';
+import 'record_search.dart';
 import 'report_export.dart';
+import 'record_view_options.dart';
+import 'chart_value_bar.dart';
 
-/// Month insights: day-by-day bars, headline stats and category breakdown.
+/// Period insights: day-by-day bars and headline stats.
 class InsightsPage extends StatefulWidget {
   const InsightsPage({super.key});
 
@@ -18,25 +24,63 @@ class InsightsPage extends StatefulWidget {
 }
 
 class _InsightsPageState extends State<InsightsPage> {
-  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+  final _period = ReportPeriod();
+  final _view = RecordViewOptions()..ascending = true;
+  final _searchController = TextEditingController();
+  bool _searching = false;
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final money = s.money;
-    final y = _month.year;
-    final m = _month.month;
-    final n = DateTime(y, m + 1, 0).day;
-    final first = DateTime(y, m, 1);
-    final last = DateTime(y, m, n);
+    final range = _period.range(s.weekStart);
+    final source = s.recordsInRange(range?.start, range?.end);
+    final entries = _view.apply(source);
+    final incomeOnly = _view.type == TxType.income;
     final now = dateOnly(DateTime.now());
-    final totals = s.monthTotals(y, m);
-
-    final daily = [
-      for (var d = 1; d <= n; d++) s.dayTotals(DateTime(y, m, d)).expense,
+    final first =
+        range?.start ?? (source.isEmpty ? now : dateOnly(source.last.date));
+    final last =
+        range?.end ?? (source.isEmpty ? now : dateOnly(source.first.date));
+    final n = last.difference(first).inDays + 1;
+    final totals = Totals(
+      entries
+          .where((txn) => txn.isIncome)
+          .fold<BigInt>(BigInt.zero, (sum, txn) => sum + txn.amountMinor),
+      entries
+          .where((txn) => !txn.isIncome)
+          .fold<BigInt>(BigInt.zero, (sum, txn) => sum + txn.amountMinor),
+    );
+    final perDay = <String, Totals>{};
+    for (final txn in entries) {
+      final key = dateKey(txn.date);
+      perDay[key] =
+          (perDay[key] ?? Totals.zero) +
+          (txn.isIncome
+              ? Totals(txn.amountMinor, 0)
+              : Totals(0, txn.amountMinor));
+    }
+    final dailyTotals = [
+      for (var d = 0; d < n; d++)
+        perDay[dateKey(addDays(first, d))] ?? Totals.zero,
     ];
-    final maxDay = daily.fold<int>(0, math.max);
-    final maxIndex = maxDay == 0 ? -1 : daily.indexOf(maxDay);
+    final days = [for (var d = 1; d <= n; d++) d];
+    final chartDays = _view.ascending ? days : days.reversed.toList();
+    final chartMaximum = dailyTotals.fold<BigInt>(
+      BigInt.zero,
+      (maximum, total) => [
+        maximum,
+        total.income,
+        total.expense,
+      ].reduce((a, b) => a > b ? a : b),
+    );
 
     int elapsed;
     if (last.isBefore(now)) {
@@ -44,327 +88,418 @@ class _InsightsPageState extends State<InsightsPage> {
     } else if (first.isAfter(now)) {
       elapsed = 0;
     } else {
-      elapsed = now.day;
+      elapsed = now.difference(first).inDays + 1;
     }
-    final avg = elapsed == 0 ? 0 : totals.expense ~/ elapsed;
-    var noSpend = 0;
-    for (var d = 0; d < elapsed; d++) {
-      if (daily[d] == 0) noSpend++;
-    }
-    var count = 0;
-    for (var d = 1; d <= n; d++) {
-      count += s.forDay(DateTime(y, m, d)).length;
-    }
-    final cats = s.expenseByCategory(first, last);
-    final catTotal = cats.fold<int>(0, (a, e) => a + e.value);
-    final budget = s.monthlyBudgetMinor;
+    final count = entries.length;
+    final budget =
+        !incomeOnly &&
+            (_period.filter == null || _period.filter == DateFilter.month)
+        ? s.monthlyBudgetMinor
+        : 0;
 
     return SafeArea(
       bottom: false,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: PeriodNavigator(
-                  title: fmtMonth(_month),
-                  subtitle: '$y',
-                  onPrev: () => setState(() => _month = DateTime(y, m - 1)),
-                  onNext: () => setState(() => _month = DateTime(y, m + 1)),
-                ),
-              ),
-              ReportExport(
-                title: 'Insights ${fmtMonth(_month)} $y',
-                from: first,
-                to: last,
-              ),
-            ],
+          AccountSwitcher(
+            viewToggle: IconButton(
+              tooltip: 'Search',
+              onPressed: () => setState(() => _searching = true),
+              icon: const Icon(Icons.search_rounded),
+            ),
+            actions: ReportExport(
+              entries: entries,
+              title: 'Insights',
+              from: range?.start,
+              to: range?.end,
+              includeAccounts: true,
+            ),
           ),
-          const SizedBox(height: 8),
-          if (count == 0)
-            const GlassCard(
-              child: EmptyState(
-                icon: Icons.insights_rounded,
-                title: 'No entries this month',
-                subtitle:
-                    'Add expenses from the calendar and your insights will appear here.',
-              ),
-            )
-          else ...[
-            GlassCard(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(
+          ReportPeriodBar(
+            period: _period,
+            onChanged: () => setState(() {}),
+            trailing: RecordSortButton(
+              options: _view,
+              onChanged: () => setState(() {}),
+            ),
+          ),
+          if (_searching)
+            InlineRecordSearch(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _query = value),
+              onClose: () {
+                FocusScope.of(context).unfocus();
+                _searchController.clear();
+                setState(() {
+                  _searching = false;
+                  _query = '';
+                });
+              },
+            ),
+          Expanded(
+            child: _query.trim().isNotEmpty
+                ? RecordSearchResults(
+                    query: _query,
+                    from: range?.start,
+                    to: range?.end,
+                    options: _view,
+                  )
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                     children: [
-                      StatChip(
-                        label: 'Spent',
-                        value: money.full(totals.expense),
-                        color: Brand.expense,
-                      ),
-                      const SizedBox(width: 8),
-                      StatChip(
-                        label: 'Income',
-                        value: money.full(totals.income),
-                        color: Brand.income,
-                      ),
-                      const SizedBox(width: 8),
-                      StatChip(label: 'Saved', value: money.signed(totals.net)),
-                    ],
-                  ),
-                  if (budget > 0) ...[
-                    const SizedBox(height: 14),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(
-                        value: math.min(1.0, totals.expense / budget),
-                        minHeight: 8,
-                        backgroundColor: context.softFill,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          totals.expense > budget
-                              ? Brand.expense
-                              : context.cs.primary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        totals.expense > budget
-                            ? 'Over the ${money.full(budget)} budget by ${money.full(totals.expense - budget)}'
-                            : '${(totals.expense * 100 / budget).round()}% of ${money.full(budget)} budget used',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: context.cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            GlassCard(
-              padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4),
-                    child: Text(
-                      'Day by day',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    height: 130,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        for (var d = 1; d <= n; d++)
-                          Expanded(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () =>
-                                  showDaySheet(context, DateTime(y, m, d)),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 1,
-                                ),
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: Container(
-                                    height: daily[d - 1] == 0
-                                        ? 3
-                                        : math.max(
-                                            5.0,
-                                            130 * daily[d - 1] / maxDay,
-                                          ),
-                                    decoration: BoxDecoration(
-                                      color: daily[d - 1] == 0
-                                          ? context.softFill
-                                          : (d - 1 == maxIndex
-                                                ? Brand.expense
-                                                : context.cs.primary),
-                                      borderRadius: BorderRadius.circular(3),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                      if (count == 0)
+                        const GlassCard(
+                          child: EmptyState(
+                            icon: Icons.insights_rounded,
+                            title: 'No entries in this period',
+                            subtitle:
+                                'Add records from the calendar and your insights will appear here.',
                           ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      for (final label in ['1', '${(n / 2).ceil()}', '$n'])
-                        Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: context.cs.onSurfaceVariant,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                _statTile(
-                  context,
-                  Icons.local_fire_department_rounded,
-                  'Highest day',
-                  maxDay == 0 ? '—' : money.full(maxDay),
-                  maxDay == 0
-                      ? ''
-                      : '${maxIndex + 1} ${fmtMonth(_month).substring(0, 3)}',
-                  Brand.expense,
-                ),
-                const SizedBox(width: 10),
-                _statTile(
-                  context,
-                  Icons.speed_rounded,
-                  'Daily average',
-                  money.full(avg),
-                  'so far this month',
-                  context.cs.primary,
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _statTile(
-                  context,
-                  Icons.celebration_rounded,
-                  'No-spend days',
-                  '$noSpend',
-                  'of $elapsed days',
-                  Brand.income,
-                ),
-                const SizedBox(width: 10),
-                _statTile(
-                  context,
-                  Icons.receipt_long_rounded,
-                  'Entries',
-                  '$count',
-                  'this month',
-                  const Color(0xFFFD9644),
-                ),
-              ],
-            ),
-            if (cats.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              GlassCard(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Where it went',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(
-                        height: 12,
-                        child: Row(
+                        )
+                      else ...[
+                        Column(
                           children: [
-                            for (final e in cats)
-                              Expanded(
-                                flex: math.max(1, e.value),
-                                child: Container(
-                                  color: s.categoryById(e.key).colorValue,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    for (final e in cats)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          children: [
-                            CategoryBubble(
-                              category: s.categoryById(e.key),
-                              size: 38,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    s.categoryById(e.key).name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: catTotal == 0
-                                          ? 0
-                                          : e.value / catTotal,
-                                      minHeight: 5,
-                                      backgroundColor: context.softFill,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        s.categoryById(e.key).colorValue,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
+                            Row(
                               children: [
-                                Text(
-                                  money.full(e.value),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
+                                if (_view.type != TxType.income)
+                                  StatChip(
+                                    label: 'Spent',
+                                    value: money.full(totals.expense),
+                                    color: Brand.expense,
+                                  ),
+                                if (_view.type == null)
+                                  const SizedBox(width: 8),
+                                if (_view.type != TxType.expense)
+                                  StatChip(
+                                    label: 'Income',
+                                    value: money.full(totals.income),
+                                    color: Brand.income,
+                                  ),
+                                if (_view.type == null)
+                                  const SizedBox(width: 8),
+                                if (_view.type == null)
+                                  StatChip(
+                                    label: 'Saved',
+                                    value: money.signed(totals.net),
+                                  ),
+                              ],
+                            ),
+                            if (budget > 0) ...[
+                              const SizedBox(height: 14),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  Brand.controlRadius,
+                                ),
+                                child: LinearProgressIndicator(
+                                  value: minorRatio(totals.expense, budget),
+                                  minHeight: 8,
+                                  backgroundColor: context.softFill,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    totals.expense > BigInt.from(budget)
+                                        ? Brand.expense
+                                        : context.cs.primary,
                                   ),
                                 ),
-                                Text(
-                                  '${(e.value * 100 / catTotal).round()}%',
+                              ),
+                              const SizedBox(height: 6),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  totals.expense > BigInt.from(budget)
+                                      ? 'Over the ${money.full(budget)} budget by ${money.full(totals.expense - BigInt.from(budget))}'
+                                      : '${(totals.expense * BigInt.from(100) + BigInt.from(budget) ~/ BigInt.two) ~/ BigInt.from(budget)}% of ${money.full(budget)} budget used',
                                   style: TextStyle(
-                                    fontSize: 11.5,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
                                     color: context.cs.onSurfaceVariant,
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ],
                         ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ],
+                        const SizedBox(height: 14),
+                        GlassCard(
+                          padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Text(
+                                  incomeOnly
+                                      ? 'Income by day'
+                                      : _view.type == TxType.expense
+                                      ? 'Expense by day'
+                                      : 'Income and expense by day',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Wrap(
+                                spacing: 16,
+                                children: [
+                                  if (totals.income > BigInt.zero)
+                                    const Text(
+                                      'Income',
+                                      style: TextStyle(
+                                        color: Brand.income,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  if (totals.expense > BigInt.zero)
+                                    const Text(
+                                      'Expense',
+                                      style: TextStyle(
+                                        color: Brand.expense,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                height:
+                                    130 +
+                                    MediaQuery.textScalerOf(context).scale(34),
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: SizedBox(
+                                    width: math.max(
+                                      MediaQuery.sizeOf(context).width - 60,
+                                      n *
+                                          (totals.income > BigInt.zero &&
+                                                  totals.expense > BigInt.zero
+                                              ? 88.0
+                                              : 48.0),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        for (final d in chartDays)
+                                          Expanded(
+                                            child: GestureDetector(
+                                              key: ValueKey(
+                                                'insight-day-${dateKey(addDays(first, d - 1))}',
+                                              ),
+                                              behavior: HitTestBehavior.opaque,
+                                              onTap: () => showDayPage(
+                                                context,
+                                                addDays(first, d - 1),
+                                                options: _view,
+                                              ),
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 1,
+                                                    ),
+                                                child: Column(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Row(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .end,
+                                                        children: [
+                                                          for (final series in [
+                                                            (
+                                                              dailyTotals[d - 1]
+                                                                  .income,
+                                                              Brand.income,
+                                                              'Income',
+                                                            ),
+                                                            (
+                                                              dailyTotals[d - 1]
+                                                                  .expense,
+                                                              Brand.expense,
+                                                              'Expense',
+                                                            ),
+                                                          ])
+                                                            if (series.$1 >
+                                                                BigInt.zero)
+                                                              Expanded(
+                                                                child: Padding(
+                                                                  padding:
+                                                                      const EdgeInsets.symmetric(
+                                                                        horizontal:
+                                                                            2,
+                                                                      ),
+                                                                  child: ChartValueBar(
+                                                                    value:
+                                                                        series
+                                                                            .$1,
+                                                                    maximum:
+                                                                        chartMaximum,
+                                                                    money:
+                                                                        money,
+                                                                    color:
+                                                                        series
+                                                                            .$2,
+                                                                    description:
+                                                                        '${fmtShort(addDays(first, d - 1))} ${series.$3}',
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                          if (dailyTotals[d - 1]
+                                                              .isEmpty)
+                                                            Expanded(
+                                                              child: ChartValueBar(
+                                                                value:
+                                                                    BigInt.zero,
+                                                                maximum:
+                                                                    chartMaximum,
+                                                                money: money,
+                                                                color: context
+                                                                    .softFill,
+                                                                description:
+                                                                    '${fmtShort(addDays(first, d - 1))} No records',
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 6),
+                                                    FittedBox(
+                                                      fit: BoxFit.scaleDown,
+                                                      child: Text(
+                                                        fmtShort(
+                                                          addDays(first, d - 1),
+                                                        ),
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: context
+                                                              .cs
+                                                              .onSurfaceVariant,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        _statistics(
+                          context,
+                          entries: entries,
+                          dailyTotals: dailyTotals,
+                          first: first,
+                          elapsed: elapsed,
+                          money: money,
+                        ),
+                      ],
+                    ],
+                  ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _statistics(
+    BuildContext context, {
+    required List<Txn> entries,
+    required List<Totals> dailyTotals,
+    required DateTime first,
+    required int elapsed,
+    required MoneyFormat money,
+  }) {
+    final both = _view.type == null;
+    List<Widget> tiles(TxType type) {
+      final income = type == TxType.income;
+      final name = income ? 'Income' : 'Expense';
+      final color = income ? Brand.income : Brand.expense;
+      final daily = [
+        for (final total in dailyTotals) income ? total.income : total.expense,
+      ];
+      final highest = daily.fold<BigInt>(BigInt.zero, (a, b) => a > b ? a : b);
+      final total = daily.fold<BigInt>(BigInt.zero, (a, b) => a + b);
+      final average = elapsed == 0
+          ? BigInt.zero
+          : total ~/ BigInt.from(elapsed);
+      final inactive = daily
+          .take(elapsed)
+          .where((value) => value == BigInt.zero)
+          .length;
+      final count = entries.where((entry) => entry.type == type).length;
+      Widget tile(
+        String metric,
+        IconData icon,
+        String label,
+        String value,
+        String sub,
+      ) => _statTile(
+        context,
+        icon,
+        label,
+        value,
+        sub,
+        color,
+        key: ValueKey('insight-stat-${type.name}-$metric'),
+      );
+      return [
+        tile(
+          'highest',
+          Icons.local_fire_department_rounded,
+          both ? 'Highest ${name.toLowerCase()} day' : 'Highest day',
+          highest == BigInt.zero ? '—' : money.full(highest),
+          highest == BigInt.zero
+              ? ''
+              : fmtShort(addDays(first, daily.indexOf(highest))),
+        ),
+        tile(
+          'average',
+          Icons.speed_rounded,
+          both ? '$name daily average' : 'Daily average',
+          money.full(average),
+          'in this period',
+        ),
+        tile(
+          'inactive',
+          Icons.celebration_rounded,
+          income ? 'No-income days' : 'No-spend days',
+          '$inactive',
+          'of $elapsed days',
+        ),
+        tile(
+          'count',
+          Icons.receipt_long_rounded,
+          both ? '$name entries' : 'Entries',
+          '$count',
+          'in this period',
+        ),
+      ];
+    }
+
+    final groups = both
+        ? [tiles(TxType.income), tiles(TxType.expense)]
+        : [tiles(_view.type!)];
+    return Column(
+      children: [
+        for (var row = 0; row < (both ? 4 : 2); row++) ...[
+          if (row > 0) const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              both ? groups[0][row] : groups[0][row * 2],
+              const SizedBox(width: 10),
+              both ? groups[1][row] : groups[0][row * 2 + 1],
+            ],
+          ),
+        ],
+      ],
     );
   }
 
@@ -374,10 +509,12 @@ class _InsightsPageState extends State<InsightsPage> {
     String label,
     String value,
     String sub,
-    Color color,
-  ) {
+    Color color, {
+    Key? key,
+  }) {
     return Expanded(
       child: GlassCard(
+        key: key,
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -387,7 +524,7 @@ class _InsightsPageState extends State<InsightsPage> {
               height: 34,
               decoration: BoxDecoration(
                 color: tint(color, 0.15),
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(Brand.controlRadius),
               ),
               child: Icon(icon, color: color, size: 19),
             ),

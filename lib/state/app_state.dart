@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -7,6 +9,7 @@ import '../data/backup.dart';
 import '../data/db.dart';
 import '../data/models.dart';
 import '../data/recurrence.dart';
+import '../data/budget.dart';
 
 int _clampInt(int v, int lo, int hi) => v < lo ? lo : (v > hi ? hi : v);
 
@@ -32,6 +35,7 @@ class AppState extends ChangeNotifier {
   List<Txn> _txns = const [];
   final Map<String, List<Txn>> _byDate = {};
   final Map<String, Totals> _dayTotals = {};
+  final Map<Txn, BigInt> _balancesAfter = {};
   List<Category> _categories = const [];
   final Map<String, Category> _catIndex = {};
   List<RecurringRule> _rules = const [];
@@ -42,9 +46,25 @@ class AppState extends ChangeNotifier {
   ThemeMode themeMode = ThemeMode.system;
   int accentIndex = 0;
   String currencyCode = 'INR';
-  int monthlyBudgetMinor = 0;
-  int dailyBudgetMinor = 0;
+  final Map<String, AccountBudget> _accountBudgets = {};
+  Map<String, AccountBudget> get accountBudgets =>
+      Map.unmodifiable(_accountBudgets);
+  AccountBudget budgetForAccount(String id) =>
+      _accountBudgets[id] ?? const AccountBudget();
+  int get monthlyBudgetMinor => selectedAccountId != null
+      ? budgetForAccount(selectedAccountId!).monthlyMinor
+      : _accounts.fold(
+          0,
+          (sum, account) => sum + budgetForAccount(account.id).monthlyMinor,
+        );
+  int get dailyBudgetMinor => selectedAccountId != null
+      ? budgetForAccount(selectedAccountId!).dailyMinor
+      : _accounts.fold(
+          0,
+          (sum, account) => sum + budgetForAccount(account.id).dailyMinor,
+        );
   int weekStart = DateTime.monday;
+  int upcomingRecurringDays = 2;
   bool lockEnabled = false;
 
   MoneyFormat get money => MoneyFormat(currencyByCode(currencyCode));
@@ -53,13 +73,17 @@ class AppState extends ChangeNotifier {
   List<Category> get categories => _categories;
   List<RecurringRule> get rules => _rules;
   List<MoneyAccount> get accounts => _accounts;
+  MoneyAccount get defaultAccount => _accounts.firstWhere(
+    (a) => a.id == kDefaultAccountId,
+    orElse: () => _accounts.first,
+  );
   MoneyAccount accountById(String id) =>
-      _accounts.firstWhere((a) => a.id == id, orElse: () => kDefaultAccount);
+      _accounts.firstWhere((a) => a.id == id, orElse: () => defaultAccount);
   List<Txn> transactionsForAccount(String id) =>
       _txns.where((t) => t.accountId == id).toList();
   Totals accountTotals(String id) {
-    var income = 0;
-    var expense = 0;
+    var income = BigInt.zero;
+    var expense = BigInt.zero;
     for (final t in transactionsForAccount(id)) {
       if (t.isIncome) {
         income += t.amountMinor;
@@ -70,8 +94,12 @@ class AppState extends ChangeNotifier {
     return Totals(income, expense);
   }
 
-  int accountBalance(String id) =>
+  BigInt accountBalance(String id) =>
       accountById(id).openingBalanceMinor + accountTotals(id).net;
+
+  /// Account balance immediately after this record, including its opening balance
+  /// and earlier records outside any active date or search filter.
+  BigInt balanceAfter(Txn txn) => _balancesAfter[txn]!;
   void selectAccount(String? id) {
     selectedAccountId = id != null && _accounts.any((a) => a.id == id)
         ? id
@@ -80,7 +108,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveAccount(MoneyAccount account) async {
+  void _validateAccount(MoneyAccount account) {
     if (account.name.trim().isEmpty) {
       throw ArgumentError('Give this account a name.');
     }
@@ -91,7 +119,33 @@ class AppState extends ChangeNotifier {
     )) {
       throw ArgumentError('An account with this name already exists.');
     }
+  }
+
+  Future<MoneyAccount> createAccount(
+    MoneyAccount account, {
+    required DateTime openingDate,
+  }) async {
+    _validateAccount(account);
+    if (_accounts.any((existing) => existing.id == account.id)) {
+      throw ArgumentError('This account already exists.');
+    }
+    await _db.createAccount(account, openingDate);
+    await _reload();
+    notifyListeners();
+    return accountById(account.id);
+  }
+
+  Future<void> saveAccount(MoneyAccount account) async {
+    _validateAccount(account);
     await _db.upsertAccount(account);
+    await _reload();
+    notifyListeners();
+  }
+
+  Future<void> deleteAccount(String id) async {
+    await _db.deleteAccount(id);
+    _accountBudgets.remove(id);
+    _persistBudgets();
     await _reload();
     notifyListeners();
   }
@@ -109,16 +163,50 @@ class AppState extends ChangeNotifier {
       Brand.accents.length - 1,
     );
     currencyCode = _prefs.getString('currency') ?? 'INR';
-    monthlyBudgetMinor = _prefs.getInt('monthlyBudget') ?? 0;
-    dailyBudgetMinor = _prefs.getInt('dailyBudget') ?? 0;
+    upcomingRecurringDays = _clampInt(
+      _prefs.getInt('upcomingRecurringDays') ?? 2,
+      1,
+      365,
+    );
     final ws = _prefs.getInt('weekStart') ?? DateTime.monday;
     weekStart = (ws == DateTime.sunday || ws == DateTime.saturday)
         ? ws
         : DateTime.monday;
     lockEnabled = _prefs.getBool('lock') ?? false;
     await _reload();
+    _loadBudgets();
     await generateDue();
   }
+
+  void _loadBudgets() {
+    _accountBudgets.clear();
+    final raw = _prefs.getString('accountBudgets');
+    if (raw != null) {
+      try {
+        _accountBudgets.addAll(decodeAccountBudgets(jsonDecode(raw)) ?? {});
+      } on FormatException {
+        /* Ignore a damaged preference. */
+      }
+    } else {
+      final legacy = AccountBudget(
+        monthlyMinor: (_prefs.getInt('monthlyBudget') ?? 0).clamp(
+          0,
+          99999999999,
+        ),
+        dailyMinor: (_prefs.getInt('dailyBudget') ?? 0).clamp(0, 99999999999),
+      );
+      if (!legacy.isEmpty) _accountBudgets[defaultAccount.id] = legacy;
+      _persistBudgets();
+    }
+  }
+
+  void _persistBudgets() => _prefs.setString(
+    'accountBudgets',
+    jsonEncode({
+      for (final entry in _accountBudgets.entries)
+        entry.key: entry.value.toMap(),
+    }),
+  );
 
   Future<void> _reload() async {
     _accounts = await _db.accounts();
@@ -142,6 +230,15 @@ class AppState extends ChangeNotifier {
     });
     _byDate.clear();
     _dayTotals.clear();
+    _balancesAfter.clear();
+    final balances = {
+      for (final account in _accounts) account.id: account.openingBalanceMinor,
+    };
+    for (final txn in _txns.reversed) {
+      final balance = (balances[txn.accountId] ?? BigInt.zero) + txn.signed;
+      balances[txn.accountId] = balance;
+      _balancesAfter[txn] = balance;
+    }
     for (final t in _txns) {
       if (selectedAccountId != null && t.accountId != selectedAccountId) {
         continue;
@@ -153,8 +250,8 @@ class AppState extends ChangeNotifier {
         final order = b.date.compareTo(a.date);
         return order != 0 ? order : (b.id ?? 0).compareTo(a.id ?? 0);
       });
-      var inc = 0;
-      var exp = 0;
+      var inc = BigInt.zero;
+      var exp = BigInt.zero;
       for (final t in list) {
         if (t.isIncome) {
           inc += t.amountMinor;
@@ -182,8 +279,8 @@ class AppState extends ChangeNotifier {
 
   /// Inclusive range of calendar days.
   Totals rangeTotals(DateTime from, DateTime to) {
-    var inc = 0;
-    var exp = 0;
+    var inc = BigInt.zero;
+    var exp = BigInt.zero;
     var d = dateOnly(from);
     final end = dateOnly(to);
     while (!d.isAfter(end)) {
@@ -200,30 +297,7 @@ class AppState extends ChangeNotifier {
   Totals monthTotals(int year, int month) =>
       rangeTotals(DateTime(year, month, 1), DateTime(year, month + 1, 0));
 
-  /// Expense minor units per category id for an inclusive range, biggest first.
-  List<MapEntry<String, int>> expenseByCategory(DateTime from, DateTime to) {
-    final sums = <String, int>{};
-    var d = dateOnly(from);
-    final end = dateOnly(to);
-    while (!d.isAfter(end)) {
-      for (final t in forDay(d)) {
-        if (!t.isIncome) {
-          sums[t.categoryId] = (sums[t.categoryId] ?? 0) + t.amountMinor;
-        }
-      }
-      d = addDays(d, 1);
-    }
-    final list = sums.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    return list;
-  }
-
-  Category categoryById(String id) => _catIndex[id] ?? kUncategorised;
-  Category categoryOf(Txn t) => categoryById(t.categoryId);
-  List<Category> categoriesFor(TxType type) =>
-      _categories.where((c) => c.type == type).toList();
-
-  /// Text search over notes, category names and amounts. Newest first.
+  /// Text search over notes, accounts and amounts. Newest first.
   List<Txn> search(String query, {int limit = 300}) {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return const [];
@@ -233,7 +307,7 @@ class AppState extends ChangeNotifier {
         continue;
       }
       final hay =
-          '${t.note} ${accountById(t.accountId).name} ${categoryOf(t).name} ${minorToPlain(t.amountMinor)}'
+          '${t.note} ${accountById(t.accountId).name} ${minorToPlain(t.amountMinor)}'
               .toLowerCase();
       if (hay.contains(q)) {
         out.add(t);
@@ -266,19 +340,6 @@ class AppState extends ChangeNotifier {
     await _db.deleteTxn(t.id!);
     _txns = _txns.where((x) => x.id != t.id).toList();
     _reindex();
-    notifyListeners();
-  }
-
-  Future<void> addCategory(Category c) async {
-    await _db.upsertCategory(c);
-    await _reload();
-    notifyListeners();
-  }
-
-  Future<void> deleteCategory(Category c) async {
-    if (c.builtin) return;
-    await _db.deleteCategory(c.id);
-    await _reload();
     notifyListeners();
   }
 
@@ -350,6 +411,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateRule(RecurringRule rule) async {
+    final old = _rules.firstWhere((r) => r.id == rule.id);
+    final yesterday = addDays(dateOnly(DateTime.now()), -1);
+    final mark =
+        old.lastGenerated != null && old.lastGenerated!.isAfter(yesterday)
+        ? old.lastGenerated!
+        : yesterday;
+    await _db.upsertRule(rule.copyWith(lastGenerated: mark));
+    await _reload();
+    await generateDue();
+    notifyListeners();
+  }
+
   /// Stops the rule. Entries it already created are kept.
   Future<void> deleteRule(RecurringRule r) async {
     if (r.id == null) return;
@@ -378,15 +452,27 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setMonthlyBudget(int minor) {
-    monthlyBudgetMinor = minor;
-    _prefs.setInt('monthlyBudget', minor);
-    notifyListeners();
-  }
+  void setMonthlyBudget(int minor, {String? accountId}) =>
+      _setBudget(minor, monthly: true, accountId: accountId);
+  void setDailyBudget(int minor, {String? accountId}) =>
+      _setBudget(minor, monthly: false, accountId: accountId);
 
-  void setDailyBudget(int minor) {
-    dailyBudgetMinor = minor;
-    _prefs.setInt('dailyBudget', minor);
+  void _setBudget(int minor, {required bool monthly, String? accountId}) {
+    final id = accountId ?? selectedAccountId ?? defaultAccount.id;
+    if (!_accounts.any((account) => account.id == id)) {
+      throw ArgumentError('Account not found.');
+    }
+    final old = budgetForAccount(id);
+    final budget = AccountBudget(
+      monthlyMinor: monthly ? minor.clamp(0, 99999999999) : old.monthlyMinor,
+      dailyMinor: monthly ? old.dailyMinor : minor.clamp(0, 99999999999),
+    );
+    if (budget.isEmpty) {
+      _accountBudgets.remove(id);
+    } else {
+      _accountBudgets[id] = budget;
+    }
+    _persistBudgets();
     notifyListeners();
   }
 
@@ -395,6 +481,20 @@ class AppState extends ChangeNotifier {
     _prefs.setInt('weekStart', weekday);
     notifyListeners();
   }
+
+  Future<void> setUpcomingRecurringDays(int days) async {
+    upcomingRecurringDays = _clampInt(days, 1, 365);
+    await _prefs.setInt('upcomingRecurringDays', upcomingRecurringDays);
+    notifyListeners();
+  }
+
+  List<RecurringOccurrence> upcomingRecurring({DateTime? at}) =>
+      upcomingOccurrences(
+        _rules,
+        now: at ?? DateTime.now(),
+        days: upcomingRecurringDays,
+        accountId: selectedAccountId,
+      );
 
   void setLock(bool on) {
     lockEnabled = on;
@@ -412,12 +512,13 @@ class AppState extends ChangeNotifier {
     dailyBudgetMinor: dailyBudgetMinor,
     rules: _rules,
     accounts: _accounts,
+    accountBudgets: _accountBudgets,
   );
 
   String buildCsv() => encodeCsv(
     _txns,
-    (id) => categoryById(id).name,
     accountName: (id) => accountById(id).name,
+    balanceAfter: balanceAfter,
   );
 
   String _dupKey(Txn t) =>
@@ -432,9 +533,8 @@ class AppState extends ChangeNotifier {
       if (b.currency != null && kCurrencies.any((c) => c.code == b.currency)) {
         setCurrency(b.currency!);
       }
-      if (b.monthlyBudgetMinor != null) setMonthlyBudget(b.monthlyBudgetMinor!);
-      if (b.dailyBudgetMinor != null) setDailyBudget(b.dailyBudgetMinor!);
       await _reload();
+      _importBudgets(b, replace: true);
       notifyListeners();
       return ImportResult(
         added: b.txns.length,
@@ -467,6 +567,7 @@ class AppState extends ChangeNotifier {
       if (haveRules.add(r.dupKey)) await _db.upsertRule(r);
     }
     await _reload();
+    _importBudgets(b, replace: false);
     notifyListeners();
     return ImportResult(
       added: fresh.length,
@@ -477,8 +578,33 @@ class AppState extends ChangeNotifier {
 
   Future<void> deleteAllData() async {
     await _db.replaceAll(const [], const []);
+    _accountBudgets.clear();
+    _persistBudgets();
     await _reload();
     notifyListeners();
+  }
+
+  void _importBudgets(ParsedBackup backup, {required bool replace}) {
+    final incoming =
+        backup.accountBudgets ??
+        {
+          defaultAccount.id: AccountBudget(
+            monthlyMinor: (backup.monthlyBudgetMinor ?? 0).clamp(
+              0,
+              99999999999,
+            ),
+            dailyMinor: (backup.dailyBudgetMinor ?? 0).clamp(0, 99999999999),
+          ),
+        };
+    if (replace) _accountBudgets.clear();
+    for (final entry in incoming.entries) {
+      if (_accounts.any((a) => a.id == entry.key) &&
+          (replace || !_accountBudgets.containsKey(entry.key)) &&
+          !entry.value.isEmpty) {
+        _accountBudgets[entry.key] = entry.value;
+      }
+    }
+    _persistBudgets();
   }
 }
 

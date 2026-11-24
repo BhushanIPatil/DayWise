@@ -32,6 +32,7 @@ class BackupService {
         currency: s.currencyCode,
         monthlyBudgetMinor: s.monthlyBudgetMinor,
         dailyBudgetMinor: s.dailyBudgetMinor,
+        accountBudgets: s.accountBudgets,
       ),
     );
     return file;

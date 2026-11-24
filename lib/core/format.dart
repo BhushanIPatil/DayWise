@@ -41,6 +41,25 @@ String fmtShort(DateTime d) => DateFormat('d MMM', 'en_US').format(d);
 String fmtStamp(DateTime d) => DateFormat('yyyyMMdd-HHmm', 'en_US').format(d);
 String fmtTime(DateTime d) => DateFormat('h:mm a', 'en_US').format(d);
 
+/// Exact minor units, accepting text from storage and legacy integer values.
+BigInt readMinor(Object value) => value is BigInt
+    ? value
+    : value is int
+    ? BigInt.from(value)
+    : value is String
+    ? BigInt.parse(value)
+    : throw const FormatException('Invalid monetary value');
+
+/// A bounded ratio for charts and progress bars, even for very large amounts.
+double minorRatio(Object numerator, Object denominator, {bool clamp = true}) {
+  final n = readMinor(numerator);
+  final d = readMinor(denominator);
+  if (n <= BigInt.zero || d <= BigInt.zero) return 0;
+  if (clamp && n >= d) return 1;
+  final ratio = (n * BigInt.from(1000000) ~/ d).toDouble() / 1000000;
+  return ratio.isFinite ? ratio : double.maxFinite;
+}
+
 // ------------------------------------------------------------- currency
 
 class Currency {
@@ -99,7 +118,7 @@ String groupDigits(String digits, bool indian) {
   return '${parts.join(',')},$last3';
 }
 
-/// Money is always stored as an integer number of minor units (paise / cents).
+/// Money uses exact minor units (paise / cents), serialized as decimal text.
 class MoneyFormat {
   const MoneyFormat(this.currency);
   final Currency currency;
@@ -108,64 +127,72 @@ class MoneyFormat {
   bool get indian => currency.indian;
 
   /// 1234550 -> "12,345.50"   (no symbol, no sign)
-  String plain(int minor) {
-    final a = minor.abs();
-    final whole = a ~/ 100;
-    final frac = a % 100;
+  String plain(Object minor) {
+    final a = readMinor(minor).abs();
+    final whole = a ~/ BigInt.from(100);
+    final frac = (a % BigInt.from(100)).toInt();
     final w = groupDigits(whole.toString(), indian);
     return frac == 0 ? w : '$w.${two(frac)}';
   }
 
   /// "₹12,345.50" or "-₹12,345.50"
-  String full(int minor) => '${minor < 0 ? '-' : ''}$symbol${plain(minor)}';
+  String full(Object minor) =>
+      '${readMinor(minor).isNegative ? '-' : ''}$symbol${plain(minor)}';
 
   /// "+₹500" / "-₹500"
-  String signed(int minor) {
-    if (minor == 0) return '$symbol${plain(0)}';
-    return '${minor > 0 ? '+' : '-'}$symbol${plain(minor)}';
+  String signed(Object minor) {
+    final value = readMinor(minor);
+    if (value == BigInt.zero) return '$symbol${plain(0)}';
+    return '${value.isNegative ? '-' : '+'}$symbol${plain(value)}';
   }
 
   /// Short form for tight spaces: 1.2K, 3.4L, 2Cr (Indian) or 1.2K, 3.4M (others). No symbol.
-  String compact(int minor) {
-    final v = minor.abs() / 100.0;
+  String compact(Object minor) {
+    final v = readMinor(minor).abs();
     if (indian) {
-      if (v >= 1e7) return '${_t(v / 1e7)}Cr';
-      if (v >= 1e5) return '${_t(v / 1e5)}L';
-      if (v >= 1e3) return '${_t(v / 1e3)}K';
-      return _t(v);
+      if (v >= BigInt.from(1000000000)) return '${_t(v, 1000000000)}Cr';
+      if (v >= BigInt.from(10000000)) return '${_t(v, 10000000)}L';
+      if (v >= BigInt.from(100000)) return '${_t(v, 100000)}K';
+      return _t(v, 100);
     }
-    if (v >= 1e9) return '${_t(v / 1e9)}B';
-    if (v >= 1e6) return '${_t(v / 1e6)}M';
-    if (v >= 1e3) return '${_t(v / 1e3)}K';
-    return _t(v);
+    if (v >= BigInt.from(100000000000)) return '${_t(v, 100000000000)}B';
+    if (v >= BigInt.from(100000000)) return '${_t(v, 100000000)}M';
+    if (v >= BigInt.from(100000)) return '${_t(v, 100000)}K';
+    return _t(v, 100);
   }
 
-  static String _t(double v) {
-    if (v >= 100) return v.round().toString();
-    final s = v.toStringAsFixed(1);
-    return s.endsWith('.0') ? s.substring(0, s.length - 2) : s;
+  static String _t(BigInt v, int divisor) {
+    final d = BigInt.from(divisor);
+    if (v >= d * BigInt.from(100)) {
+      return ((v + d ~/ BigInt.two) ~/ d).toString();
+    }
+    final tenths = (v * BigInt.from(10) + d ~/ BigInt.two) ~/ d;
+    final fraction = tenths % BigInt.from(10);
+    return fraction == BigInt.zero
+        ? '${tenths ~/ BigInt.from(10)}'
+        : '${tenths ~/ BigInt.from(10)}.$fraction';
   }
 }
 
 /// Parses what the user typed on the keypad ("123", "123.", "123.4", "0.05") to minor units.
-int parseMinor(String s) {
-  if (s.isEmpty) return 0;
+BigInt parseMinor(String s) {
+  if (s.isEmpty) return BigInt.zero;
   final parts = s.split('.');
-  final whole = int.tryParse(parts[0].isEmpty ? '0' : parts[0]) ?? 0;
-  var frac = 0;
-  if (parts.length > 1 && parts[1].isNotEmpty) {
-    final f = parts[1].padRight(2, '0').substring(0, 2);
-    frac = int.tryParse(f) ?? 0;
-  }
-  return whole * 100 + frac;
+  final whole = parts[0].isEmpty ? '0' : parts[0];
+  final frac = (parts.length > 1 ? parts[1] : '')
+      .padRight(2, '0')
+      .substring(0, 2);
+  return BigInt.tryParse('$whole$frac') ?? BigInt.zero;
 }
 
 /// Inverse of [parseMinor], for pre-filling the keypad when editing.
-String minorToInput(int minor) {
-  final whole = minor ~/ 100;
-  final frac = minor % 100;
-  if (frac == 0) return '$whole';
+String minorToInput(Object minor) {
+  final value = readMinor(minor);
+  final whole = value.abs() ~/ BigInt.from(100);
+  final frac = (value.abs() % BigInt.from(100)).toInt();
+  final sign = value.isNegative ? '-' : '';
+  if (frac == 0) return '$sign$whole';
   var f = two(frac);
   if (f.endsWith('0')) f = f.substring(0, 1);
-  return '$whole.$f';
+  return '$sign$whole.$f';
 }

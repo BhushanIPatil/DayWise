@@ -13,12 +13,11 @@ day, the deeper the colour. Tap any day to see the entries or add a new one in t
 WHAT YOU GET
 • Month calendar with daily totals and spending heat-map
 • Week view with bar chart and "vs last week" comparison
-• Insights: highest day, daily average, no-spend days and a category breakdown
-• Fast add: decimal keyboard, categories with icons, notes, date and time
+• Insights: highest day, daily average, no-spend days and entry counts
+• Fast add: decimal keyboard, notes, date and time
 • Monthly and daily budgets with a progress bar and over-budget warning
-• Search across all your notes, categories and amounts
+• Search across all your notes, accounts and amounts
 • Recurring entries: add rent, EMI, salary or subscriptions once and they record themselves
-• Your own categories, icons and colours
 • Dark mode and six accent colours
 • 20+ currencies, Indian (lakh/crore) or international number grouping
 

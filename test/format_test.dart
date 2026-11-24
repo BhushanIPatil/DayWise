@@ -4,20 +4,43 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('parseMinor / minorToInput', () {
     test('parses keypad input', () {
-      expect(parseMinor(''), 0);
-      expect(parseMinor('0'), 0);
-      expect(parseMinor('123'), 12300);
-      expect(parseMinor('123.'), 12300);
-      expect(parseMinor('123.4'), 12340);
-      expect(parseMinor('123.45'), 12345);
-      expect(parseMinor('0.05'), 5);
-      expect(parseMinor('.5'), 50);
+      expect(parseMinor(''), BigInt.from(0));
+      expect(parseMinor('0'), BigInt.from(0));
+      expect(parseMinor('123'), BigInt.from(12300));
+      expect(parseMinor('123.'), BigInt.from(12300));
+      expect(parseMinor('123.4'), BigInt.from(12340));
+      expect(parseMinor('123.45'), BigInt.from(12345));
+      expect(parseMinor('0.05'), BigInt.from(5));
+      expect(parseMinor('.5'), BigInt.from(50));
     });
 
     test('round trips', () {
       for (final v in [1, 5, 50, 99, 100, 12345, 12340, 99999999999]) {
-        expect(parseMinor(minorToInput(v)), v);
+        expect(parseMinor(minorToInput(v)), BigInt.from(v));
       }
+    });
+
+    test('large amounts retain cents beyond the native integer range', () {
+      expect(parseMinor('1234567890.12'), BigInt.from(123456789012));
+      expect(
+        parseMinor('92233720368547758.07'),
+        BigInt.from(9223372036854775807),
+      );
+      expect(
+        parseMinor('92233720368547758.08'),
+        BigInt.parse('9223372036854775808'),
+      );
+      expect(
+        parseMinor('999999999999999999999999999999.99'),
+        BigInt.parse('99999999999999999999999999999999'),
+      );
+      final huge = '${List.filled(400, '9').join()}.99';
+      expect(minorToInput(parseMinor(huge)), huge);
+      expect(minorRatio(parseMinor(huge), parseMinor(huge)), 1);
+      expect(
+        minorRatio(parseMinor(huge), parseMinor(huge) * BigInt.two),
+        closeTo(0.5, 0.000001),
+      );
     });
   });
 

@@ -23,7 +23,9 @@ class EntryDateTimeFields extends StatelessWidget {
       showDragHandle: true,
       backgroundColor: context.cs.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(Brand.sheetRadius),
+        ),
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, update) => SingleChildScrollView(
@@ -96,7 +98,8 @@ class EntryDateTimeFields extends StatelessWidget {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(value),
-      helpText: 'When did it happen?',
+      helpText: '',
+      initialEntryMode: TimePickerEntryMode.input,
       builder: (ctx, child) => MediaQuery(
         data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false),
         child: Theme(
@@ -104,13 +107,13 @@ class EntryDateTimeFields extends StatelessWidget {
             timePickerTheme: TimePickerThemeData(
               backgroundColor: ctx.cs.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(Brand.cardRadius),
               ),
               hourMinuteShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(Brand.controlRadius),
               ),
               dayPeriodShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(Brand.controlRadius),
               ),
               dialBackgroundColor: ctx.softFill,
             ),
@@ -166,35 +169,26 @@ class EntryDateTimeFields extends StatelessWidget {
     IconData icon,
     VoidCallback onTap,
   ) => Material(
-    color: context.softFill,
-    borderRadius: BorderRadius.circular(20),
+    color: Colors.transparent,
+    borderRadius: BorderRadius.circular(Brand.controlRadius),
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      borderRadius: BorderRadius.circular(Brand.controlRadius),
+      child: InputDecorator(
+        decoration: InputDecoration(labelText: label),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Icon(icon, size: 17, color: context.cs.primary),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: context.cs.onSurfaceVariant,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
+            Icon(icon, size: 17, color: context.cs.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                text,
+                maxLines: 2,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              text,
-              maxLines: 2,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+              ),
             ),
           ],
         ),

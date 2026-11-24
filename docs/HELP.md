@@ -2,7 +2,7 @@
 
 ## How do I start using DayWise?
 
-Tap + to add an expense or income. Enter the amount, choose the account and category, check the date and time, then tap Save expense or Save income. Saved entries appear in the calendar, week view and insights.
+Tap + to add an expense or income. Enter the amount, choose the account, check the date and time, then tap Save expense or Save income. Saved entries appear in the calendar, week view and insights.
 
 ## How do I edit or delete an entry?
 
@@ -50,7 +50,7 @@ Open Settings > Monthly budget or Daily budget, enter an amount and save. Budget
 
 ## How do recurring entries work?
 
-Open Settings > Recurring entries and add a rule for rent, salary or another regular item. Choose the type, amount, account, category, frequency and dates. Due entries are recorded when the app opens or resumes. DayWise does not connect to a bank or make payments.
+Open Settings > Recurring entries and add a rule for rent, salary or another regular item. Choose the type, amount, account, frequency and dates. Due entries are recorded when the app opens or resumes. DayWise does not connect to a bank or make payments.
 
 ## How do I stop a recurring entry?
 
@@ -66,8 +66,16 @@ Yes. Entries, reports, search and these Help answers work offline. Terms, contac
 
 ## How do I delete my data?
 
-Open Settings > Delete all data and confirm both prompts. This removes entries, recurring rules and custom accounts/categories. Delete exported files, shared copies and cloud backups separately. Preferences such as appearance may remain.
+Open Settings > Delete all data and confirm both prompts. This removes entries, recurring rules and custom accounts. Delete exported files, shared copies and cloud backups separately. Preferences such as appearance may remain.
 
 ## Why is a button unavailable or a save failing?
 
 Enter a valid amount greater than zero and fill in required fields. Wait for saves or restores to finish. For file problems, check free storage and choose a storage app available on your phone. Restore needs a DayWise JSON backup. If the problem continues, contact support below without sending private financial files.
+
+## How do I edit or delete an account?
+
+Open Settings > Your accounts, or choose Manage accounts from the dashboard three-dot menu. Use the three-dot menu on an account card to edit or delete it. Deletion requires confirmation and permanently removes the account, its opening balance, its income and expense records, and its recurring rules. Save a backup first if you may need the data. At least one account must remain; add another before deleting your last account.
+
+## How is a new account opening balance recorded?
+
+When adding an account, enter a starting balance and choose its date and time. A positive amount creates an Opening balance income record; a negative amount creates an expense record. A zero amount creates no record. The opening record appears in account activity, Calendar, List and Insights, and can be edited or deleted like another record. Existing account balances are preserved.

@@ -17,8 +17,8 @@ class RecurringRule {
   const RecurringRule({
     this.id,
     required this.type,
-    required this.amountMinor,
-    required this.categoryId,
+    required Object amountMinor,
+    this.categoryId = '',
     this.accountId = kDefaultAccountId,
     this.timeMinutes = 0,
     this.note = '',
@@ -27,11 +27,13 @@ class RecurringRule {
     this.endDate,
     this.lastGenerated,
     required this.createdAt,
-  });
+  }) : _amountMinor = amountMinor;
 
   final int? id;
   final TxType type;
-  final int amountMinor;
+  final Object _amountMinor;
+  BigInt get amountMinor => readMinor(_amountMinor);
+  // Retained only to read and round-trip older databases and backups.
   final String categoryId;
   final String accountId;
   final int timeMinutes;
@@ -64,7 +66,7 @@ class RecurringRule {
   Map<String, Object?> toMap({bool includeId = true}) => {
     if (includeId && id != null) 'id': id,
     'type': type.index,
-    'amount_minor': amountMinor,
+    'amount_minor': amountMinor.toString(),
     'category_id': categoryId,
     'account_id': accountId,
     'time_minutes': timeMinutes,
@@ -81,8 +83,8 @@ class RecurringRule {
     return RecurringRule(
       id: (m['id'] as num?)?.toInt(),
       type: (m['type'] as num).toInt() == 1 ? TxType.income : TxType.expense,
-      amountMinor: (m['amount_minor'] as num).toInt(),
-      categoryId: m['category_id'] as String,
+      amountMinor: readMinor(m['amount_minor']!),
+      categoryId: (m['category_id'] as String?) ?? '',
       accountId: (m['account_id'] as String?) ?? kDefaultAccountId,
       timeMinutes: (m['time_minutes'] as num?)?.toInt() ?? 0,
       note: (m['note'] as String?) ?? '',
@@ -186,4 +188,69 @@ DateTime? nextDue(RecurringRule r, DateTime today) {
     if (d.isAfter(today)) return d;
   }
   return null;
+}
+
+class RecurringOccurrence {
+  const RecurringOccurrence({required this.rule, required this.date});
+  final RecurringRule rule;
+  final DateTime date;
+}
+
+/// A read-only preview for tomorrow through the final selected calendar day.
+List<RecurringOccurrence> upcomingOccurrences(
+  Iterable<RecurringRule> rules, {
+  required DateTime now,
+  required int days,
+  String? accountId,
+}) {
+  if (days <= 0) return [];
+  final from = addDays(dateOnly(now), 1);
+  final through = addDays(dateOnly(now), days);
+  final out = <RecurringOccurrence>[];
+  for (final rule in rules) {
+    if (accountId != null && rule.accountId != accountId) continue;
+    final start = dateOnly(rule.startDate);
+    final distance = DateTime.utc(
+      from.year,
+      from.month,
+      from.day,
+    ).difference(DateTime.utc(start.year, start.month, start.day)).inDays;
+    var index = math.max(0, switch (rule.frequency) {
+      Frequency.daily => distance,
+      Frequency.weekly => distance ~/ 7,
+      Frequency.monthly =>
+        (from.year - start.year) * 12 + from.month - start.month,
+      Frequency.yearly => from.year - start.year,
+    });
+    while (true) {
+      final day = occurrence(start, rule.frequency, index++);
+      if (day.isAfter(through) ||
+          (rule.endDate != null && day.isAfter(dateOnly(rule.endDate!)))) {
+        break;
+      }
+      if (day.isBefore(from) ||
+          (rule.lastGenerated != null &&
+              !day.isAfter(dateOnly(rule.lastGenerated!)))) {
+        continue;
+      }
+      final minutes = rule.timeMinutes.clamp(0, 1439);
+      out.add(
+        RecurringOccurrence(
+          rule: rule,
+          date: DateTime(
+            day.year,
+            day.month,
+            day.day,
+            minutes ~/ 60,
+            minutes % 60,
+          ),
+        ),
+      );
+    }
+  }
+  out.sort((a, b) {
+    final order = a.date.compareTo(b.date);
+    return order != 0 ? order : (a.rule.id ?? 0).compareTo(b.rule.id ?? 0);
+  });
+  return out;
 }

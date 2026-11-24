@@ -6,6 +6,45 @@ import '../core/theme.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 
+/// Scroll the fields while the action remains at the bottom of the visible form.
+class PinnedForm extends StatelessWidget {
+  const PinnedForm({
+    super.key,
+    required this.child,
+    required this.action,
+    this.expand = false,
+    this.contentPadding = const EdgeInsets.all(16),
+  });
+  final Widget child;
+  final Widget action;
+  final bool expand;
+  final EdgeInsetsGeometry contentPadding;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+    children: [
+      Flexible(
+        fit: expand ? FlexFit.tight : FlexFit.loose,
+        child: SingleChildScrollView(padding: contentPadding, child: child),
+      ),
+      Container(
+        decoration: BoxDecoration(
+          color: context.cs.surface,
+          border: Border(top: BorderSide(color: context.theme.dividerColor)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: action,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
 /// Soft rounded surface used for every card in the app.
 class GlassCard extends StatelessWidget {
   const GlassCard({
@@ -13,7 +52,7 @@ class GlassCard extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.margin,
-    this.radius = 24,
+    this.radius = Brand.cardRadius,
     this.onTap,
     this.gradient,
   });
@@ -102,22 +141,192 @@ class AppBackground extends StatelessWidget {
   }
 }
 
-class CategoryBubble extends StatelessWidget {
-  const CategoryBubble({super.key, required this.category, this.size = 44});
-  final Category category;
-  final double size;
+class TransactionTypeBadge extends StatelessWidget {
+  const TransactionTypeBadge({super.key, required this.type});
+  final TxType type;
 
   @override
   Widget build(BuildContext context) {
-    final c = category.colorValue;
+    final c = type == TxType.income ? Brand.income : Brand.expense;
     return Container(
-      width: size,
-      height: size,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: tint(c, 0.16),
-        borderRadius: BorderRadius.circular(size * 0.34),
+        borderRadius: BorderRadius.circular(4),
       ),
-      child: Icon(category.iconData, color: c, size: size * 0.5),
+      child: Text(
+        type == TxType.income ? 'Income' : 'Expense',
+        style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class AccountBadge extends StatelessWidget {
+  const AccountBadge({super.key, required this.account});
+  final MoneyAccount account;
+  @override
+  Widget build(BuildContext context) {
+    final background = Color.alphaBlend(
+      tint(Color(account.color), context.isDark ? .28 : .12),
+      context.cs.surface,
+    );
+    final foreground = background.computeLuminance() > .179
+        ? Colors.black
+        : Colors.white;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        border: Border.all(color: tint(Color(account.color), .45)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        account.name,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: foreground,
+        ),
+      ),
+    );
+  }
+}
+
+/// Shared columns keep notes separate from transaction amounts and balances.
+class TransactionRecordDetails extends StatelessWidget {
+  const TransactionRecordDetails({
+    super.key,
+    required this.txn,
+    this.showDate = false,
+    this.balance,
+  });
+  final Txn txn;
+  final bool showDate;
+  final BigInt? balance;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final color = txn.isIncome ? Brand.income : Brand.expense;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: Text(
+                txn.note.isEmpty
+                    ? (txn.isIncome ? 'Income' : 'Expense')
+                    : txn.note,
+                softWrap: true,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    s.money.signed(txn.signed),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          fmtTime(txn.date),
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: context.cs.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        AccountBadge(account: s.accountById(txn.accountId)),
+                      ],
+                    ),
+                  ),
+                  if (showDate)
+                    Text(
+                      fmtDayLong(txn.date),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: context.cs.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (balance != null) ...[
+                    Text(
+                      'Balance after',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        s.money.full(balance!),
+                        key: ValueKey('transaction-balance-${txn.id}'),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: balance! < BigInt.zero
+                              ? Brand.expense
+                              : context.cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -135,66 +344,14 @@ class EntryTile extends StatelessWidget {
   final bool showDate;
 
   @override
-  Widget build(BuildContext context) {
-    final s = AppScope.of(context);
-    final cat = s.categoryOf(txn);
-    final color = txn.isIncome ? Brand.income : Brand.expense;
-    final sub = <String>[
-      if (showDate) fmtDayLong(txn.date),
-      fmtTime(txn.date),
-      if (s.selectedAccountId == null) s.accountById(txn.accountId).name,
-      if (txn.note.isNotEmpty) txn.note,
-    ].join(' · ');
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          children: [
-            CategoryBubble(category: cat),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    cat.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                  if (sub.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        sub,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: context.cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              s.money.signed(txn.signed),
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 15.5,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => InkWell(
+    borderRadius: BorderRadius.circular(Brand.controlRadius),
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      child: TransactionRecordDetails(txn: txn, showDate: showDate),
+    ),
+  );
 }
 
 class EmptyState extends StatelessWidget {
@@ -255,11 +412,13 @@ class PeriodNavigator extends StatelessWidget {
     this.subtitle,
     required this.onPrev,
     required this.onNext,
+    this.onSelect,
   });
   final String title;
   final String? subtitle;
   final VoidCallback onPrev;
   final VoidCallback onNext;
+  final VoidCallback? onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -270,24 +429,37 @@ class PeriodNavigator extends StatelessWidget {
           icon: const Icon(Icons.chevron_left_rounded, size: 30),
         ),
         Expanded(
-          child: Column(
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
+          child: InkWell(
+            onTap: onSelect,
+            borderRadius: BorderRadius.circular(Brand.controlRadius),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: context.cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              if (subtitle != null)
-                Text(
-                  subtitle!,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: context.cs.onSurfaceVariant,
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
         IconButton(
@@ -317,7 +489,7 @@ class StatChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: context.softFill,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(Brand.controlRadius),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

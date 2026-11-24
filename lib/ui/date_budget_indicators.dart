@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
+import '../core/format.dart';
 import '../state/app_state.dart';
 
 /// Daily spending and the full month's budget balance for the selected date.
@@ -11,11 +12,12 @@ class DateBudgetIndicators extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    Widget indicator(String label, int spent, int budget) {
-      final over = spent > budget;
+    Widget indicator(String label, BigInt spent, int budget) {
+      final limit = BigInt.from(budget);
+      final over = spent > limit;
       final color = over
           ? Brand.expense
-          : spent == budget
+          : spent == limit
           ? Colors.orange
           : Brand.income;
       return Padding(
@@ -33,7 +35,7 @@ class DateBudgetIndicators extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             LinearProgressIndicator(
-              value: (spent / budget).clamp(0.0, 1.0),
+              value: minorRatio(spent, limit),
               minHeight: 4,
               color: color,
               backgroundColor: context.softFill,
@@ -41,8 +43,8 @@ class DateBudgetIndicators extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               over
-                  ? 'Over budget by ${s.money.full(spent - budget)}'
-                  : '${s.money.full(budget - spent)} remaining',
+                  ? 'Over budget by ${s.money.full(spent - limit)}'
+                  : '${s.money.full(limit - spent)} remaining',
               style: const TextStyle(fontSize: 11),
             ),
           ],

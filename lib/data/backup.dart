@@ -3,11 +3,12 @@ import 'dart:convert';
 import '../core/format.dart';
 import 'models.dart';
 import 'recurrence.dart';
+import 'budget.dart';
 
 /// Pure (no I/O) helpers for the backup file and CSV export, so they can be unit tested.
 
 const String kBackupApp = 'DayWise';
-const int kBackupSchema = 2;
+const int kBackupSchema = 4;
 
 class ParsedBackup {
   ParsedBackup({
@@ -19,6 +20,7 @@ class ParsedBackup {
     this.currency,
     this.monthlyBudgetMinor,
     this.dailyBudgetMinor,
+    this.accountBudgets,
   });
 
   final List<Txn> txns;
@@ -31,6 +33,7 @@ class ParsedBackup {
   final String? currency;
   final int? monthlyBudgetMinor;
   final int? dailyBudgetMinor;
+  final Map<String, AccountBudget>? accountBudgets;
 }
 
 String encodeBackup({
@@ -42,6 +45,7 @@ String encodeBackup({
   List<RecurringRule> rules = const [],
   List<MoneyAccount> accounts = const [kDefaultAccount],
   DateTime? now,
+  Map<String, AccountBudget>? accountBudgets,
 }) {
   final data = <String, Object?>{
     'app': kBackupApp,
@@ -51,6 +55,11 @@ String encodeBackup({
       'currency': currency,
       'monthlyBudgetMinor': monthlyBudgetMinor,
       'dailyBudgetMinor': dailyBudgetMinor,
+      if (accountBudgets != null)
+        'accountBudgets': {
+          for (final entry in accountBudgets.entries)
+            entry.key: entry.value.toMap(),
+        },
     },
     'accounts': [for (final account in accounts) account.toMap()],
     'categories': [
@@ -68,7 +77,7 @@ String encodeBackup({
       for (final r in rules)
         {
           'type': r.type == TxType.income ? 'income' : 'expense',
-          'amountMinor': r.amountMinor,
+          'amountMinor': r.amountMinor.toString(),
           'categoryId': r.categoryId,
           'accountId': r.accountId,
           'timeMinutes': r.timeMinutes,
@@ -87,7 +96,7 @@ String encodeBackup({
           'date': dateKey(t.date),
           'occurredAt': t.date.toIso8601String(),
           'accountId': t.accountId,
-          'amountMinor': t.amountMinor,
+          'amountMinor': t.amountMinor.toString(),
           'type': t.isIncome ? 'income' : 'expense',
           'categoryId': t.categoryId,
           'note': t.note,
@@ -123,8 +132,8 @@ ParsedBackup parseBackup(String text) {
   for (final raw in root['transactions'] as List) {
     try {
       final m = raw as Map;
-      final amount = (m['amountMinor'] as num).toInt();
-      if (amount <= 0) throw const FormatException('amount');
+      final amount = readMinor(m['amountMinor'] as Object);
+      if (amount <= BigInt.zero) throw const FormatException('amount');
       txns.add(
         Txn(
           date: m['occurredAt'] == null
@@ -133,7 +142,7 @@ ParsedBackup parseBackup(String text) {
           accountId: (m['accountId'] as String?) ?? kDefaultAccountId,
           amountMinor: amount,
           type: m['type'] == 'income' ? TxType.income : TxType.expense,
-          categoryId: (m['categoryId'] as String?) ?? kUncategorised.id,
+          categoryId: (m['categoryId'] as String?) ?? '',
           note: (m['note'] as String?) ?? '',
           createdAt:
               (m['createdAt'] as num?)?.toInt() ??
@@ -174,13 +183,13 @@ ParsedBackup parseBackup(String text) {
     for (final raw in rawRules) {
       try {
         final m = raw as Map;
-        final amount = (m['amountMinor'] as num).toInt();
-        if (amount <= 0) throw const FormatException('amount');
+        final amount = readMinor(m['amountMinor'] as Object);
+        if (amount <= BigInt.zero) throw const FormatException('amount');
         rules.add(
           RecurringRule(
             type: m['type'] == 'income' ? TxType.income : TxType.expense,
             amountMinor: amount,
-            categoryId: (m['categoryId'] as String?) ?? kUncategorised.id,
+            categoryId: (m['categoryId'] as String?) ?? '',
             accountId: (m['accountId'] as String?) ?? kDefaultAccountId,
             timeMinutes: ((m['timeMinutes'] as num?)?.toInt() ?? 0).clamp(
               0,
@@ -224,7 +233,7 @@ ParsedBackup parseBackup(String text) {
   }
   // Keep legacy data and recover account references if a backup omitted a row.
   for (final id in {
-    kDefaultAccountId,
+    if (accounts.isEmpty) kDefaultAccountId,
     ...txns.map((t) => t.accountId),
     ...rules.map((r) => r.accountId),
   }) {
@@ -262,6 +271,9 @@ ParsedBackup parseBackup(String text) {
     currency: currency,
     monthlyBudgetMinor: monthly,
     dailyBudgetMinor: daily,
+    accountBudgets: st is Map
+        ? decodeAccountBudgets(st['accountBudgets'])
+        : null,
   );
 }
 
@@ -276,27 +288,33 @@ String _csvCell(String s) {
 }
 
 /// "12345" -> "123.45"
-String minorToPlain(int minor) {
-  final a = minor.abs();
-  return '${a ~/ 100}.${two(a % 100)}';
+String minorToPlain(Object minor) {
+  final value = readMinor(minor);
+  final a = value.abs();
+  return '${value.isNegative ? '-' : ''}${a ~/ BigInt.from(100)}.${two((a % BigInt.from(100)).toInt())}';
 }
 
 String encodeCsv(
-  List<Txn> txns,
-  String Function(String id) categoryName, {
+  List<Txn> txns, {
   String Function(String id)? accountName,
+  BigInt Function(Txn txn)? balanceAfter,
 }) {
   final sorted = [...txns]
     ..sort((a, b) {
       final c = a.date.compareTo(b.date);
       return c != 0 ? c : (a.id ?? 0).compareTo(b.id ?? 0);
     });
-  final sb = StringBuffer('Date,Time,Account,Type,Category,Amount,Note\r\n');
+  final balances = <String, BigInt>{};
+  final sb = StringBuffer('Date,Time,Note,Account,Type,Amount,Balance\r\n');
   for (final t in sorted) {
+    final balance =
+        balanceAfter?.call(t) ??
+        ((balances[t.accountId] ?? BigInt.zero) + t.signed);
+    balances[t.accountId] = balance;
     sb.write(
-      '${dateKey(t.date)},${two(t.date.hour)}:${two(t.date.minute)},'
+      '${fmtDayLong(t.date)},${fmtTime(t.date)},${_csvCell(t.note)},'
       '${_csvCell(accountName?.call(t.accountId) ?? t.accountId)},${t.isIncome ? 'Income' : 'Expense'},'
-      '${_csvCell(categoryName(t.categoryId))},${minorToPlain(t.amountMinor)},${_csvCell(t.note)}\r\n',
+      '${minorToPlain(t.amountMinor)},${minorToPlain(balance)}\r\n',
     );
   }
   return sb.toString();

@@ -28,17 +28,18 @@ class AppDb {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 3,
+        version: 4,
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) await _createRecurring(db);
           if (oldVersion < 3) await _createAccounts(db);
+          if (oldVersion < 4) await _migrateAmountsToText(db);
         },
         onCreate: (db, version) async {
           await db.execute('''
           CREATE TABLE transactions(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT NOT NULL,
-            amount_minor INTEGER NOT NULL,
+            amount_minor TEXT NOT NULL,
             type INTEGER NOT NULL,
             category_id TEXT NOT NULL,
             note TEXT NOT NULL DEFAULT '',
@@ -65,7 +66,7 @@ class AppDb {
   static Future<void> _createAccounts(Database db) async {
     await db.execute('''CREATE TABLE accounts(
       id TEXT PRIMARY KEY, name TEXT NOT NULL,
-      opening_balance_minor INTEGER NOT NULL DEFAULT 0, color INTEGER NOT NULL
+      opening_balance_minor TEXT NOT NULL DEFAULT '0', color INTEGER NOT NULL
     )''');
     await db.insert('accounts', kDefaultAccount.toMap());
     await db.execute(
@@ -100,12 +101,55 @@ class AppDb {
     );
   }
 
+  /// The starting amount lives in a normal record, never also in the account row.
+  Future<void> createAccount(MoneyAccount account, DateTime openingDate) async {
+    final db = await _database;
+    await db.transaction((tx) async {
+      await tx.insert('accounts', {
+        ...account.toMap(),
+        'opening_balance_minor': '0',
+      });
+      if (account.openingBalanceMinor != BigInt.zero) {
+        final record = Txn(
+          date: openingDate,
+          accountId: account.id,
+          amountMinor: account.openingBalanceMinor.abs(),
+          type: account.openingBalanceMinor > BigInt.zero
+              ? TxType.income
+              : TxType.expense,
+          note: 'Opening balance',
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+        );
+        await tx.insert('transactions', record.toMap(includeId: false));
+      }
+    });
+  }
+
+  /// Delete an account and its dependent data together, keeping one usable account.
+  Future<void> deleteAccount(String id) async {
+    final db = await _database;
+    await db.transaction((tx) async {
+      final accounts = await tx.query('accounts', columns: ['id']);
+      if (!accounts.any((account) => account['id'] == id)) {
+        throw StateError('This account no longer exists.');
+      }
+      if (accounts.length <= 1) {
+        throw StateError(
+          'Keep at least one account. Add another account first.',
+        );
+      }
+      await tx.delete('transactions', where: 'account_id = ?', whereArgs: [id]);
+      await tx.delete('recurring', where: 'account_id = ?', whereArgs: [id]);
+      await tx.delete('accounts', where: 'id = ?', whereArgs: [id]);
+    });
+  }
+
   static Future<void> _createRecurring(Database db) {
     return db.execute('''
       CREATE TABLE IF NOT EXISTS recurring(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         type INTEGER NOT NULL,
-        amount_minor INTEGER NOT NULL,
+        amount_minor TEXT NOT NULL,
         category_id TEXT NOT NULL,
         note TEXT NOT NULL DEFAULT '',
         frequency INTEGER NOT NULL,
@@ -114,6 +158,70 @@ class AppDb {
         last_generated TEXT,
         created_at INTEGER NOT NULL
       )''');
+  }
+
+  /// Rebuild with TEXT affinity so SQLite never coerces large amounts to REAL.
+  /// Runs inside SQLite's version-upgrade transaction, preserving every row ID.
+  static Future<void> _migrateAmountsToText(Database db) async {
+    final hasSequences = (await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE name = 'sqlite_sequence'",
+    )).isNotEmpty;
+    final sequences = hasSequences
+        ? await db.query(
+            'sqlite_sequence',
+            where: 'name IN (?, ?)',
+            whereArgs: ['transactions', 'recurring'],
+          )
+        : <Map<String, Object?>>[];
+    await db.execute('''CREATE TABLE transactions_v4(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,
+      amount_minor TEXT NOT NULL, type INTEGER NOT NULL,
+      category_id TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      account_id TEXT NOT NULL DEFAULT '$kDefaultAccountId', occurred_at TEXT
+    )''');
+    await db.execute('''INSERT INTO transactions_v4
+      SELECT id, date, CAST(amount_minor AS TEXT), type, category_id, note,
+        created_at, account_id, occurred_at FROM transactions''');
+    await db.execute('DROP TABLE transactions');
+    await db.execute('ALTER TABLE transactions_v4 RENAME TO transactions');
+    await db.execute('CREATE INDEX idx_tx_date ON transactions(date)');
+    await db.execute(
+      'CREATE INDEX idx_tx_account_date ON transactions(account_id, date)',
+    );
+    await db.execute('''CREATE TABLE recurring_v4(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, type INTEGER NOT NULL,
+      amount_minor TEXT NOT NULL, category_id TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '', frequency INTEGER NOT NULL,
+      start_date TEXT NOT NULL, end_date TEXT, last_generated TEXT,
+      created_at INTEGER NOT NULL,
+      account_id TEXT NOT NULL DEFAULT '$kDefaultAccountId',
+      time_minutes INTEGER NOT NULL DEFAULT 0
+    )''');
+    await db.execute('''INSERT INTO recurring_v4
+      SELECT id, type, CAST(amount_minor AS TEXT), category_id, note, frequency,
+        start_date, end_date, last_generated, created_at, account_id, time_minutes
+      FROM recurring''');
+    await db.execute('DROP TABLE recurring');
+    await db.execute('ALTER TABLE recurring_v4 RENAME TO recurring');
+    await db.execute('''CREATE TABLE accounts_v4(
+      id TEXT PRIMARY KEY, name TEXT NOT NULL,
+      opening_balance_minor TEXT NOT NULL DEFAULT '0', color INTEGER NOT NULL
+    )''');
+    await db.execute(
+      '''INSERT INTO accounts_v4
+      SELECT id, name, CAST(opening_balance_minor AS TEXT), color FROM accounts''',
+    );
+    await db.execute('DROP TABLE accounts');
+    await db.execute('ALTER TABLE accounts_v4 RENAME TO accounts');
+    for (final sequence in sequences) {
+      await db.update(
+        'sqlite_sequence',
+        {'seq': sequence['seq']},
+        where: 'name = ?',
+        whereArgs: [sequence['name']],
+      );
+    }
   }
 
   // ------------------------------------------------------------ transactions
@@ -161,16 +269,6 @@ class AppDb {
 
   Future<List<Category>> categories() async {
     final db = await _database;
-    // Make sure the built-in categories always exist.
-    final batch = db.batch();
-    for (final c in kDefaultCategories) {
-      batch.insert(
-        'categories',
-        c.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
-    }
-    await batch.commit(noResult: true);
     final rows = await db.query(
       'categories',
       orderBy: 'sort ASC, name COLLATE NOCASE ASC',

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -9,12 +8,12 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/backup_service.dart';
 import '../state/app_state.dart';
-import 'categories_page.dart';
 import 'accounts_page.dart';
-import 'help_page.dart';
 import 'external_link.dart';
 import 'recurring_page.dart';
 import 'widgets.dart';
+import 'upcoming_recurring.dart';
+import 'budgets_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -67,41 +66,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<int?> _askAmount(String title, String hint, int initialMinor) {
-    final ctl = TextEditingController(
-      text: initialMinor > 0 ? minorToInput(initialMinor) : '',
-    );
-    return showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: ctl,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-          ],
-          decoration: InputDecoration(hintText: hint),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 0),
-            child: const Text('Clear'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, parseMinor(ctl.text)),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ------------------------------------------------------------------ actions
 
   Future<void> _pickCurrency(AppState s) async {
@@ -116,7 +80,9 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         decoration: BoxDecoration(
           color: ctx.cs.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(Brand.sheetRadius),
+          ),
         ),
         child: ListView(
           shrinkWrap: true,
@@ -261,7 +227,7 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (ctx) => AlertDialog(
         title: const Text('Delete all data?'),
         content: const Text(
-          'Every entry and custom category will be erased from this phone. Save a backup first if you may need it.',
+          'Every entry, recurring rule and custom account will be erased from this phone. Save a backup first if you may need it.',
         ),
         actions: [
           TextButton(
@@ -412,30 +378,24 @@ class _SettingsPageState extends State<SettingsPage> {
               'Monthly budget',
               s.monthlyBudgetMinor > 0
                   ? money.full(s.monthlyBudgetMinor)
-                  : 'Not set',
-              () async {
-                final v = await _askAmount(
-                  'Monthly budget',
-                  'e.g. 30000',
-                  s.monthlyBudgetMinor,
-                );
-                if (v != null) s.setMonthlyBudget(v);
-              },
+                  : 'Set a budget for each account',
+              () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const BudgetsPage(monthly: true),
+                ),
+              ),
             ),
             _tile(
               Icons.today_rounded,
               'Daily budget',
               s.dailyBudgetMinor > 0
                   ? money.full(s.dailyBudgetMinor)
-                  : 'Not set',
-              () async {
-                final v = await _askAmount(
-                  'Daily budget',
-                  'e.g. 1000',
-                  s.dailyBudgetMinor,
-                );
-                if (v != null) s.setDailyBudget(v);
-              },
+                  : 'Set a budget for each account',
+              () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const BudgetsPage(monthly: false),
+                ),
+              ),
             ),
             _tile(
               Icons.event_repeat_rounded,
@@ -450,22 +410,16 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             _tile(
-              Icons.category_rounded,
-              'Categories',
-              'Add or remove your own',
-              () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const CategoriesPage(),
-                  ),
-                );
-              },
-            ),
-            _tile(
               Icons.calendar_view_week_rounded,
               'Week starts on',
               weekName,
               () => _pickWeekStart(s),
+            ),
+            _tile(
+              Icons.upcoming_rounded,
+              'Upcoming recurring',
+              'Show the next ${s.upcomingRecurringDays} ${s.upcomingRecurringDays == 1 ? 'day' : 'days'} on Calendar',
+              () => configureUpcomingRecurring(context),
             ),
           ]),
           _section('Accounts', [
@@ -534,10 +488,14 @@ class _SettingsPageState extends State<SettingsPage> {
             _tile(
               Icons.help_outline_rounded,
               'Help',
-              'Answers about entries, backups and data safety',
-              () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute<void>(builder: (_) => const HelpPage())),
+              'Open the help centre in your browser',
+              () => openExternalLink(context, AppInfo.helpUrl),
+            ),
+            _tile(
+              Icons.support_agent_rounded,
+              'Contact us',
+              'Open the support form in your browser',
+              () => openExternalLink(context, AppInfo.supportUrl),
             ),
             _tile(
               Icons.article_outlined,
@@ -625,7 +583,7 @@ class _SettingsPageState extends State<SettingsPage> {
       height: 40,
       decoration: BoxDecoration(
         color: tint(c, 0.13),
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(Brand.controlRadius),
       ),
       child: Icon(icon, color: c, size: 21),
     );

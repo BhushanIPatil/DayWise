@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
 import 'backup.dart';
 import 'db.dart';
 import 'models.dart';
 import 'recurrence.dart';
+import 'budget.dart';
 
 /// Portable SQLite backup containing records and the settings needed to restore.
 class DatabaseBackup {
@@ -28,7 +30,7 @@ class DatabaseBackup {
     try {
       await db.execute(
         'CREATE TABLE backup_settings(app TEXT, schema INTEGER, '
-        'currency TEXT, monthly_budget INTEGER, daily_budget INTEGER)',
+        'currency TEXT, monthly_budget INTEGER, daily_budget INTEGER, account_budgets TEXT)',
       );
       await db.insert('backup_settings', {
         'app': kBackupApp,
@@ -36,6 +38,12 @@ class DatabaseBackup {
         'currency': data.currency,
         'monthly_budget': data.monthlyBudgetMinor,
         'daily_budget': data.dailyBudgetMinor,
+        'account_budgets': data.accountBudgets == null
+            ? null
+            : jsonEncode({
+                for (final entry in data.accountBudgets!.entries)
+                  entry.key: entry.value.toMap(),
+              }),
       });
     } finally {
       await db.close();
@@ -58,7 +66,7 @@ class DatabaseBackup {
       final st = settings.single;
       if (st['schema'] is! int ||
           (st['schema'] as int) > kBackupSchema ||
-          await db.getVersion() > 3) {
+          await db.getVersion() > 4) {
         throw const FormatException(
           'Please update DayWise to restore this backup.',
         );
@@ -83,6 +91,11 @@ class DatabaseBackup {
           currency: st['currency'] as String? ?? 'INR',
           monthlyBudgetMinor: st['monthly_budget'] as int? ?? 0,
           dailyBudgetMinor: st['daily_budget'] as int? ?? 0,
+          accountBudgets: st['account_budgets'] is String
+              ? decodeAccountBudgets(
+                  jsonDecode(st['account_budgets'] as String),
+                )
+              : null,
         ),
       );
     } on FormatException {

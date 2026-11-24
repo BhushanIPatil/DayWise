@@ -4,7 +4,6 @@ import '../ads/ad_service.dart';
 import '../core/theme.dart';
 import '../state/app_state.dart';
 import 'calendar_page.dart';
-import 'accounts_page.dart';
 import 'entry_sheet.dart';
 import 'insights_page.dart';
 import 'settings_page.dart';
@@ -12,7 +11,7 @@ import 'week_page.dart';
 import 'records_page.dart';
 import 'widgets.dart';
 
-/// Calendar (or list), week, insights and settings with a quick add button.
+/// Calendar (or week), list, insights and settings with a quick add button.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -22,7 +21,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _tab = 0;
-  bool _listView = false;
+  bool _weekView = false;
 
   @override
   void initState() {
@@ -53,38 +52,26 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           const AppBackground(),
           Column(
             children: [
-              if (_tab != 3)
-                SafeArea(
-                  bottom: false,
-                  child: AccountSwitcher(
-                    viewToggle: _tab == 0
-                        ? IconButton(
-                            tooltip: _listView
-                                ? 'Switch to calendar'
-                                : 'Switch to list',
-                            icon: Icon(
-                              _listView
-                                  ? Icons.calendar_month_rounded
-                                  : Icons.list_alt_rounded,
-                            ),
-                            onPressed: () =>
-                                setState(() => _listView = !_listView),
-                          )
-                        : null,
-                  ),
-                ),
               Expanded(
                 child: MediaQuery.removePadding(
                   context: context,
-                  removeTop: _tab != 3,
+                  removeTop: false,
                   child: IndexedStack(
                     index: _tab,
                     children: [
                       IndexedStack(
-                        index: _listView ? 1 : 0,
-                        children: const [CalendarPage(), RecordsPage()],
+                        index: _weekView ? 1 : 0,
+                        children: [
+                          CalendarPage(
+                            onWeekView: () => setState(() => _weekView = true),
+                          ),
+                          WeekPage(
+                            onCalendarView: () =>
+                                setState(() => _weekView = false),
+                          ),
+                        ],
                       ),
-                      const WeekPage(),
+                      const RecordsPage(),
                       const InsightsPage(),
                       const SettingsPage(),
                     ],
@@ -139,7 +126,7 @@ class _NavPill extends StatelessWidget {
       height: 66,
       decoration: BoxDecoration(
         color: context.cardColor,
-        borderRadius: BorderRadius.circular(33),
+        borderRadius: BorderRadius.circular(Brand.cardRadius),
         border: Border.all(
           color: context.isDark
               ? const Color(0x1AFFFFFF)
@@ -156,7 +143,7 @@ class _NavPill extends StatelessWidget {
       child: Row(
         children: [
           _item(context, 0, Icons.calendar_month_rounded, 'Calendar'),
-          _item(context, 1, Icons.view_week_rounded, 'Week'),
+          _item(context, 1, Icons.list_alt_rounded, 'List'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: GestureDetector(
@@ -208,7 +195,7 @@ class _NavPill extends StatelessWidget {
                 color: sel
                     ? tint(context.cs.primary, 0.14)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(Brand.controlRadius),
               ),
               child: Icon(icon, size: 23, color: color),
             ),
