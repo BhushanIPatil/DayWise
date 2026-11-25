@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import 'accounts_page.dart';
+import 'categories_page.dart';
 import 'date_time_fields.dart';
 import 'widgets.dart';
 import 'transaction_type_toggle.dart';
@@ -57,6 +58,7 @@ class _EntrySheetState extends State<EntrySheet> {
   late DateTime _date;
   final TextEditingController _amount = TextEditingController();
   late String _accountId;
+  String _categoryId = kDefaultCategoryId;
   bool _saving = false;
   final TextEditingController _note = TextEditingController();
 
@@ -66,6 +68,7 @@ class _EntrySheetState extends State<EntrySheet> {
     final e = widget.edit;
     if (e != null) {
       _type = e.type;
+      _categoryId = e.categoryId;
       _date = e.date;
       _amount.text = minorToInput(e.amountMinor);
       _accountId = e.accountId;
@@ -107,7 +110,7 @@ class _EntrySheetState extends State<EntrySheet> {
       accountId: _accountId,
       amountMinor: minor,
       type: _type,
-      categoryId: old?.categoryId ?? '',
+      categoryId: s.categoryById(_categoryId).id,
       note: _note.text.trim(),
       createdAt: old?.createdAt ?? DateTime.now().millisecondsSinceEpoch,
     );
@@ -223,6 +226,11 @@ class _EntrySheetState extends State<EntrySheet> {
               AccountField(
                 value: _accountId,
                 onChanged: (id) => setState(() => _accountId = id),
+              ),
+              const SizedBox(height: 12),
+              CategoryField(
+                value: _categoryId,
+                onChanged: (id) => setState(() => _categoryId = id),
               ),
               const SizedBox(height: 12),
               TransactionTypeToggle(

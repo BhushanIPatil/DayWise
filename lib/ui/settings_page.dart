@@ -9,6 +9,7 @@ import '../core/theme.dart';
 import '../data/backup_service.dart';
 import '../state/app_state.dart';
 import 'accounts_page.dart';
+import 'categories_page.dart';
 import 'external_link.dart';
 import 'recurring_page.dart';
 import 'widgets.dart';
@@ -367,6 +368,14 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ]),
           _section('Money', [
+            _tile(
+              Icons.category_outlined,
+              'Categories',
+              'Create and manage icons and colours',
+              () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const CategoriesPage()),
+              ),
+            ),
             _tile(
               Icons.currency_exchange_rounded,
               'Currency',

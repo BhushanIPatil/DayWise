@@ -5,6 +5,9 @@ import '../core/theme.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import 'entry_sheet.dart';
+import 'accounts_page.dart';
+import 'record_search.dart';
+import 'report_export.dart';
 import 'widgets.dart';
 import 'date_budget_indicators.dart';
 import 'record_view_options.dart';
@@ -34,11 +37,24 @@ class DayPage extends StatefulWidget {
 
 class _DayPageState extends State<DayPage> {
   late DateTime _day;
+  late final RecordViewOptions _view;
+  final _searchController = TextEditingController();
+  bool _searching = false;
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
-    _day = widget.initial;
+    _day = dateOnly(widget.initial);
+    _view = RecordViewOptions()
+      ..ascending = widget.options?.ascending ?? false
+      ..type = widget.options?.type;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _move(int delta) {
@@ -50,10 +66,13 @@ class _DayPageState extends State<DayPage> {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final money = s.money;
-    final entries = (widget.options ?? RecordViewOptions()).apply(
-      s.forDay(_day),
+    final matches = _query.trim().isEmpty
+        ? null
+        : s.search(_query, limit: s.all.length).toSet();
+    final entries = _view.apply(
+      s.forDay(_day).where((t) => matches == null || matches.contains(t)),
     );
-    final type = widget.options?.type;
+    final type = _view.type;
     final totals = Totals(
       entries
           .where((t) => t.isIncome)
@@ -62,18 +81,37 @@ class _DayPageState extends State<DayPage> {
           .where((t) => !t.isIncome)
           .fold<BigInt>(BigInt.zero, (sum, t) => sum + t.amountMinor),
     );
-    final isToday = sameDay(_day, DateTime.now());
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
+            Row(
+              children: [
+                const BackButton(),
+                Expanded(
+                  child: AccountSwitcher(
+                    viewToggle: IconButton(
+                      tooltip: 'Search',
+                      onPressed: () => setState(() => _searching = true),
+                      icon: const Icon(Icons.search_rounded),
+                    ),
+                    actions: ReportExport(
+                      title: 'Day',
+                      entries: entries,
+                      from: _day,
+                      to: _day,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
               child: Row(
                 children: [
-                  const BackButton(),
                   IconButton(
+                    tooltip: 'Previous day',
                     onPressed: () => _move(-1),
                     icon: const Icon(Icons.chevron_left_rounded, size: 28),
                   ),
@@ -84,33 +122,46 @@ class _DayPageState extends State<DayPage> {
                         if (v < -200) _move(1);
                         if (v > 200) _move(-1);
                       },
-                      child: Column(
-                        children: [
-                          Text(
-                            isToday ? 'Today' : fmtWeekday(_day),
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                            ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${fmtWeekday(_day)}, ${fmtDayLong(_day)}',
+                          key: const ValueKey('day-heading'),
+                          maxLines: 1,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
                           ),
-                          Text(
-                            fmtDayLong(_day),
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: context.cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                   IconButton(
+                    tooltip: 'Next day',
                     onPressed: () => _move(1),
                     icon: const Icon(Icons.chevron_right_rounded, size: 28),
+                  ),
+                  RecordSortButton(
+                    options: _view,
+                    showDateSort: false,
+                    onChanged: () => setState(() {}),
                   ),
                 ],
               ),
             ),
+            if (_searching)
+              InlineRecordSearch(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _query = value),
+                onClose: () {
+                  FocusScope.of(context).unfocus();
+                  _searchController.clear();
+                  setState(() {
+                    _searching = false;
+                    _query = '';
+                  });
+                },
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
               child: Row(
@@ -148,7 +199,7 @@ class _DayPageState extends State<DayPage> {
                       subtitle:
                           'Tap a button below to add an expense or income for this day.',
                     )
-                  : TransactionList(entries: entries),
+                  : TransactionList(entries: entries, showDateHeaders: false),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),

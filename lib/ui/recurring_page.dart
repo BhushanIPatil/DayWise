@@ -8,6 +8,7 @@ import '../data/recurrence.dart';
 import '../state/app_state.dart';
 import 'widgets.dart';
 import 'accounts_page.dart';
+import 'categories_page.dart';
 import 'date_time_fields.dart';
 import 'transaction_type_toggle.dart';
 
@@ -223,6 +224,7 @@ class _RuleEditorState extends State<_RuleEditor> {
   int _timeMinutes = DateTime.now().hour * 60 + DateTime.now().minute;
   final TextEditingController _amount = TextEditingController();
   final TextEditingController _note = TextEditingController();
+  String _categoryId = kDefaultCategoryId;
   bool _saving = false;
 
   @override
@@ -231,6 +233,7 @@ class _RuleEditorState extends State<_RuleEditor> {
     final old = widget.edit;
     if (old == null) return;
     _type = old.type;
+    _categoryId = old.categoryId;
     _freq = old.frequency;
     _start = old.startDate;
     _end = old.endDate;
@@ -265,7 +268,7 @@ class _RuleEditorState extends State<_RuleEditor> {
     final s = AppScope.read(context);
     final rule = RecurringRule(
       id: widget.edit?.id,
-      categoryId: widget.edit?.categoryId ?? '',
+      categoryId: s.categoryById(_categoryId).id,
       lastGenerated: widget.edit?.lastGenerated,
       type: _type,
       amountMinor: minor,
@@ -331,6 +334,11 @@ class _RuleEditorState extends State<_RuleEditor> {
               AccountField(
                 value: _accountId ?? s.selectedAccountId ?? s.defaultAccount.id,
                 onChanged: (id) => setState(() => _accountId = id),
+              ),
+              const SizedBox(height: 12),
+              CategoryField(
+                value: _categoryId,
+                onChanged: (id) => setState(() => _categoryId = id),
               ),
               const SizedBox(height: 12),
               TransactionTypeToggle(

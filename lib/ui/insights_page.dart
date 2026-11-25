@@ -14,6 +14,7 @@ import 'record_search.dart';
 import 'report_export.dart';
 import 'record_view_options.dart';
 import 'chart_value_bar.dart';
+import 'category_analysis.dart';
 
 /// Period insights: day-by-day bars and headline stats.
 class InsightsPage extends StatefulWidget {
@@ -29,6 +30,7 @@ class _InsightsPageState extends State<InsightsPage> {
   final _searchController = TextEditingController();
   bool _searching = false;
   String _query = '';
+  AnalysisView _analysisView = AnalysisView.overview;
 
   @override
   void dispose() {
@@ -43,6 +45,18 @@ class _InsightsPageState extends State<InsightsPage> {
     final range = _period.range(s.weekStart);
     final source = s.recordsInRange(range?.start, range?.end);
     final entries = _view.apply(source);
+    final query = _query.trim().toLowerCase();
+    final matches = query.isEmpty
+        ? null
+        : s.search(_query, limit: s.all.length).toSet();
+    final categoryEntries = entries
+        .where(
+          (txn) =>
+              matches == null ||
+              matches.contains(txn) ||
+              s.categoryById(txn.categoryId).name.toLowerCase().contains(query),
+        )
+        .toList();
     final incomeOnly = _view.type == TxType.income;
     final now = dateOnly(DateTime.now());
     final first =
@@ -108,7 +122,9 @@ class _InsightsPageState extends State<InsightsPage> {
               icon: const Icon(Icons.search_rounded),
             ),
             actions: ReportExport(
-              entries: entries,
+              entries: _analysisView == AnalysisView.categories
+                  ? categoryEntries
+                  : entries,
               title: 'Insights',
               from: range?.start,
               to: range?.end,
@@ -120,8 +136,13 @@ class _InsightsPageState extends State<InsightsPage> {
             onChanged: () => setState(() {}),
             trailing: RecordSortButton(
               options: _view,
+              showDateSort: false,
               onChanged: () => setState(() {}),
             ),
+          ),
+          AnalysisViewToggle(
+            value: _analysisView,
+            onChanged: (view) => setState(() => _analysisView = view),
           ),
           if (_searching)
             InlineRecordSearch(
@@ -137,7 +158,15 @@ class _InsightsPageState extends State<InsightsPage> {
               },
             ),
           Expanded(
-            child: _query.trim().isNotEmpty
+            child: _analysisView == AnalysisView.categories
+                ? CategoryAnalysis(
+                    entries: categoryEntries,
+                    type: _view.type,
+                    from: range?.start,
+                    to: range?.end,
+                    query: _query,
+                  )
+                : _query.trim().isNotEmpty
                 ? RecordSearchResults(
                     query: _query,
                     from: range?.start,

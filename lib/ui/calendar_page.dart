@@ -13,6 +13,7 @@ import 'report_export.dart';
 import 'accounts_page.dart';
 import 'report_period.dart';
 import 'upcoming_recurring.dart';
+import 'record_view_options.dart';
 
 /// Home screen: a swipeable month calendar where every day shows what was spent.
 class CalendarPage extends StatefulWidget {
@@ -33,6 +34,7 @@ class _CalendarPageState extends State<CalendarPage> {
   final _searchController = TextEditingController();
   bool _searching = false;
   String _query = '';
+  final _view = RecordViewOptions();
 
   static int _pageFor(DateTime d) => (d.year - _baseYear) * 12 + d.month - 1;
   static DateTime _monthFor(int page) => DateTime(_baseYear, 1 + page);
@@ -75,13 +77,15 @@ class _CalendarPageState extends State<CalendarPage> {
 
   void _openDay(DateTime d) {
     setState(() => _selected = d);
-    showDayPage(context, d);
+    showDayPage(context, d, options: _view);
   }
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    final totals = s.monthTotals(_focused.year, _focused.month);
+    final totals = _view.filterTotals(
+      s.monthTotals(_focused.year, _focused.month),
+    );
 
     return SafeArea(
       bottom: false,
@@ -98,6 +102,12 @@ class _CalendarPageState extends State<CalendarPage> {
               title: 'Calendar ${fmtMonth(_focused)} ${_focused.year}',
               from: _focused,
               to: DateTime(_focused.year, _focused.month + 1, 0),
+              entries: _view.apply(
+                s.recordsInRange(
+                  _focused,
+                  DateTime(_focused.year, _focused.month + 1, 0),
+                ),
+              ),
             ),
           ),
           Row(
@@ -118,6 +128,11 @@ class _CalendarPageState extends State<CalendarPage> {
                 onPressed: widget.onWeekView,
                 icon: const Icon(Icons.view_week_rounded),
               ),
+              RecordSortButton(
+                options: _view,
+                showDateSort: false,
+                onChanged: () => setState(() {}),
+              ),
             ],
           ),
           if (_searching)
@@ -135,7 +150,11 @@ class _CalendarPageState extends State<CalendarPage> {
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
-            child: _SummaryCard(month: _focused, totals: totals),
+            child: _SummaryCard(
+              month: _focused,
+              totals: totals,
+              type: _view.type,
+            ),
           ),
           _WeekdayRow(weekStart: s.weekStart),
           Expanded(
@@ -152,10 +171,13 @@ class _CalendarPageState extends State<CalendarPage> {
                     month: _monthFor(i),
                     selected: _selected,
                     onTap: _openDay,
+                    options: _view,
                   ),
                 ),
                 if (_query.trim().isNotEmpty)
-                  Positioned.fill(child: RecordSearchResults(query: _query)),
+                  Positioned.fill(
+                    child: RecordSearchResults(query: _query, options: _view),
+                  ),
               ],
             ),
           ),
@@ -166,15 +188,16 @@ class _CalendarPageState extends State<CalendarPage> {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.month, required this.totals});
+  const _SummaryCard({required this.month, required this.totals, this.type});
   final DateTime month;
   final Totals totals;
+  final TxType? type;
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final money = s.money;
-    final budget = s.monthlyBudgetMinor;
+    final budget = type == TxType.income ? 0 : s.monthlyBudgetMinor;
     final progress = minorRatio(totals.expense, budget);
     final over = budget > 0 && totals.expense > BigInt.from(budget);
 
@@ -194,7 +217,11 @@ class _SummaryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Balance in ${fmtMonth(month)}',
+                      '${type == null
+                          ? 'Balance'
+                          : type == TxType.income
+                          ? 'Income'
+                          : 'Expense'} in ${fmtMonth(month)}',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 12.5,
@@ -206,7 +233,13 @@ class _SummaryCard extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        money.signed(totals.net),
+                        type == null
+                            ? money.signed(totals.net)
+                            : money.full(
+                                type == TxType.income
+                                    ? totals.income
+                                    : totals.expense,
+                              ),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 28,
@@ -228,17 +261,19 @@ class _SummaryCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        _mini(
-                          'Income',
-                          money.full(totals.income),
-                          const Color(0xFF8FF0CD),
-                        ),
-                        const SizedBox(height: 6),
-                        _mini(
-                          'Expense',
-                          money.full(totals.expense),
-                          const Color(0xFFFFB5C4),
-                        ),
+                        if (type != TxType.expense)
+                          _mini(
+                            'Income',
+                            money.full(totals.income),
+                            const Color(0xFF8FF0CD),
+                          ),
+                        if (type == null) const SizedBox(height: 6),
+                        if (type != TxType.income)
+                          _mini(
+                            'Expense',
+                            money.full(totals.expense),
+                            const Color(0xFFFFB5C4),
+                          ),
                       ],
                     ),
                   ),
@@ -334,10 +369,12 @@ class _MonthGrid extends StatelessWidget {
     required this.month,
     required this.selected,
     required this.onTap,
+    required this.options,
   });
   final DateTime month;
   final DateTime? selected;
   final ValueChanged<DateTime> onTap;
+  final RecordViewOptions options;
 
   @override
   Widget build(BuildContext context) {
@@ -350,7 +387,9 @@ class _MonthGrid extends StatelessWidget {
 
     var maxExpense = BigInt.zero;
     for (var d = 1; d <= daysInMonth; d++) {
-      final t = s.dayTotals(DateTime(month.year, month.month, d));
+      final t = options.filterTotals(
+        s.dayTotals(DateTime(month.year, month.month, d)),
+      );
       if (t.expense > maxExpense) maxExpense = t.expense;
     }
 
@@ -398,7 +437,7 @@ class _MonthGrid extends StatelessWidget {
   ) {
     if (day < 1 || day > daysInMonth) return SizedBox(height: h);
     final date = DateTime(month.year, month.month, day);
-    final totals = s.dayTotals(date);
+    final totals = options.filterTotals(s.dayTotals(date));
     return _DayCell(
       day: day,
       height: h,
@@ -409,10 +448,11 @@ class _MonthGrid extends StatelessWidget {
       overBudget:
           s.dailyBudgetMinor > 0 &&
           totals.expense > BigInt.from(s.dailyBudgetMinor),
-      dailyBudgetUsage: s.dailyBudgetMinor > 0
+      dailyBudgetUsage: options.type != TxType.income && s.dailyBudgetMinor > 0
           ? minorRatio(totals.expense, s.dailyBudgetMinor, clamp: false)
           : null,
-      monthlyBudgetUsage: s.monthlyBudgetMinor > 0
+      monthlyBudgetUsage:
+          options.type != TxType.income && s.monthlyBudgetMinor > 0
           ? minorRatio(
               s.monthTotals(date.year, date.month).expense,
               s.monthlyBudgetMinor,

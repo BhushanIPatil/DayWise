@@ -38,7 +38,17 @@ const MoneyAccount kDefaultAccount = MoneyAccount(
   name: 'Everyday',
 );
 
-/// Legacy metadata kept for compatibility with older databases and backups.
+const String kDefaultCategoryId = 'other';
+const Category kDefaultCategory = Category(
+  id: kDefaultCategoryId,
+  name: 'Other',
+  icon: 'other',
+  color: 0xFF78909C,
+  type: TxType.expense,
+  builtin: true,
+);
+
+/// Categories are shared by income and expense records.
 class Category {
   const Category({
     required this.id,
@@ -85,7 +95,7 @@ class Txn {
     required this.date,
     required Object amountMinor,
     required this.type,
-    this.categoryId = '',
+    this.categoryId = kDefaultCategoryId,
     this.accountId = kDefaultAccountId,
     this.note = '',
     required this.createdAt,
@@ -96,7 +106,6 @@ class Txn {
   final Object _amountMinor;
   BigInt get amountMinor => readMinor(_amountMinor); // always positive
   final TxType type;
-  // Retained only to read and round-trip older databases and backups.
   final String categoryId;
   final String accountId;
   final String note;
@@ -144,7 +153,7 @@ class Txn {
     accountId: (m['account_id'] as String?) ?? kDefaultAccountId,
     amountMinor: readMinor(m['amount_minor']!),
     type: (m['type'] as num).toInt() == 1 ? TxType.income : TxType.expense,
-    categoryId: (m['category_id'] as String?) ?? '',
+    categoryId: (m['category_id'] as String?) ?? kDefaultCategoryId,
     note: (m['note'] as String?) ?? '',
     createdAt: (m['created_at'] as num).toInt(),
   );

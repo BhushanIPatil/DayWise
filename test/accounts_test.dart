@@ -126,6 +126,7 @@ void main() {
       final entries = await db.allTxns();
       expect(entries.single.id, 42);
       expect(entries.single.note, 'Keep me');
+      expect(entries.single.categoryId, kDefaultCategoryId);
       expect(entries.single.amountMinor, BigInt.from(12345));
       expect(entries.single.accountId, kDefaultAccountId);
       expect(entries.single.date, DateTime(2026, 10, 1));
@@ -135,6 +136,7 @@ void main() {
       if (version >= 2) {
         expect(rules.single.lastGenerated, DateTime(2026, 10, 1));
         expect(rules.single.accountId, kDefaultAccountId);
+        expect(rules.single.categoryId, kDefaultCategoryId);
       } else {
         expect(rules, isEmpty);
       }

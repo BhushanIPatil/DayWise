@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
+import '../data/models.dart';
+import 'record_view_options.dart';
 import '../state/app_state.dart';
 import 'day_page.dart';
 import 'widgets.dart';
 import 'report_export.dart';
 import 'accounts_page.dart';
 import 'chart_value_bar.dart';
+import 'category_analysis.dart';
 
 /// Income and expense bars for each day of the week.
 class WeekPage extends StatefulWidget {
@@ -22,6 +25,8 @@ class WeekPage extends StatefulWidget {
 
 class _WeekPageState extends State<WeekPage> {
   DateTime _anchor = dateOnly(DateTime.now());
+  AnalysisView _analysisView = AnalysisView.overview;
+  final _view = RecordViewOptions();
 
   @override
   Widget build(BuildContext context) {
@@ -30,9 +35,11 @@ class _WeekPageState extends State<WeekPage> {
     final start = startOfWeek(_anchor, s.weekStart);
     final end = addDays(start, 6);
     final days = [for (var i = 0; i < 7; i++) addDays(start, i)];
-    final per = [for (final d in days) s.dayTotals(d)];
-    final total = s.rangeTotals(start, end);
-    final prev = s.rangeTotals(addDays(start, -7), addDays(start, -1));
+    final per = [for (final d in days) _view.filterTotals(s.dayTotals(d))];
+    final total = _view.filterTotals(s.rangeTotals(start, end));
+    final prev = _view.filterTotals(
+      s.rangeTotals(addDays(start, -7), addDays(start, -1)),
+    );
     final maximum = per.fold<BigInt>(
       BigInt.zero,
       (m, t) => [m, t.income, t.expense].reduce((a, b) => a > b ? a : b),
@@ -65,6 +72,7 @@ class _WeekPageState extends State<WeekPage> {
             actions: ReportExport(
               includeAccounts: true,
               title: 'Week',
+              entries: _view.apply(s.recordsInRange(start, end)),
               from: start,
               to: end,
             ),
@@ -84,201 +92,244 @@ class _WeekPageState extends State<WeekPage> {
                 onPressed: widget.onCalendarView,
                 icon: const Icon(Icons.calendar_month_rounded),
               ),
+              RecordSortButton(
+                options: _view,
+                showDateSort: false,
+                onChanged: () => setState(() {}),
+              ),
             ],
           ),
+          AnalysisViewToggle(
+            value: _analysisView,
+            onChanged: (view) => setState(() => _analysisView = view),
+          ),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              children: [
-                GlassCard(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            child: _analysisView == AnalysisView.categories
+                ? CategoryAnalysis(
+                    entries: _view.apply(s.recordsInRange(start, end)),
+                    type: _view.type,
+                    from: start,
+                    to: end,
+                  )
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                     children: [
-                      Text(
-                        'Spent this week',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: context.cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          money.full(total.expense),
-                          style: const TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.8,
-                          ),
-                        ),
-                      ),
-                      if (deltaText != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            deltaText,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: deltaColor,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          StatChip(
-                            label: 'Income',
-                            value: money.full(total.income),
-                            color: Brand.income,
-                          ),
-                          const SizedBox(width: 8),
-                          StatChip(
-                            label: 'Daily average',
-                            value: money.full(total.expense ~/ BigInt.from(7)),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                GlassCard(
-                  padding: const EdgeInsets.fromLTRB(12, 18, 12, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        spacing: 16,
-                        children: [
-                          if (total.income > BigInt.zero)
-                            const Text(
-                              'Income',
+                      GlassCard(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _view.type == TxType.income
+                                  ? 'Income this week'
+                                  : 'Spent this week',
                               style: TextStyle(
-                                color: Brand.income,
-                                fontWeight: FontWeight.w700,
+                                fontSize: 12.5,
+                                color: context.cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          if (total.expense > BigInt.zero)
-                            const Text(
-                              'Expense',
-                              style: TextStyle(
-                                color: Brand.expense,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      LayoutBuilder(
-                        builder: (context, constraints) =>
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: SizedBox(
-                                width: math.max(
-                                  constraints.maxWidth,
-                                  7 *
-                                      (total.income > BigInt.zero &&
-                                              total.expense > BigInt.zero
-                                          ? 88.0
-                                          : 48.0),
+                            const SizedBox(height: 2),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                money.full(
+                                  _view.type == TxType.income
+                                      ? total.income
+                                      : total.expense,
                                 ),
-                                height:
-                                    138 +
-                                    MediaQuery.textScalerOf(context).scale(34),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    for (var i = 0; i < 7; i++)
-                                      Expanded(
-                                        child: _Bar(
-                                          date: days[i],
-                                          income: per[i].income,
-                                          expense: per[i].expense,
-                                          maximum: maximum,
-                                          money: money,
-                                          isToday: sameDay(days[i], today),
-                                          onTap: () =>
-                                              showDayPage(context, days[i]),
-                                        ),
-                                      ),
-                                  ],
+                                style: const TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.8,
                                 ),
                               ),
                             ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                GlassCard(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < 7; i++)
-                        InkWell(
-                          borderRadius: BorderRadius.circular(
-                            Brand.controlRadius,
-                          ),
-                          onTap: () => showDayPage(context, days[i]),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 10,
-                              horizontal: 4,
-                            ),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 64,
-                                  child: Text(
-                                    '${fmtWeekday(days[i]).substring(0, 3)} ${days[i].day}',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: sameDay(days[i], today)
-                                          ? context.cs.primary
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    per[i].income > BigInt.zero
-                                        ? '+${money.full(per[i].income)}'
-                                        : '',
-                                    style: const TextStyle(
-                                      color: Brand.income,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 12.5,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  per[i].expense > BigInt.zero
-                                      ? money.full(per[i].expense)
-                                      : '—',
+                            if (deltaText != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  deltaText,
                                   style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    color: per[i].expense > BigInt.zero
-                                        ? Brand.expense
-                                        : context.cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: deltaColor,
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                if (_view.type == null)
+                                  StatChip(
+                                    label: 'Income',
+                                    value: money.full(total.income),
+                                    color: Brand.income,
+                                  ),
+                                if (_view.type == null)
+                                  const SizedBox(width: 8),
+                                StatChip(
+                                  label: 'Daily average',
+                                  value: money.full(
+                                    (_view.type == TxType.income
+                                            ? total.income
+                                            : total.expense) ~/
+                                        BigInt.from(7),
                                   ),
                                 ),
                               ],
                             ),
-                          ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(height: 14),
+                      GlassCard(
+                        padding: const EdgeInsets.fromLTRB(12, 18, 12, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 16,
+                              children: [
+                                if (total.income > BigInt.zero)
+                                  const Text(
+                                    'Income',
+                                    style: TextStyle(
+                                      color: Brand.income,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                if (total.expense > BigInt.zero)
+                                  const Text(
+                                    'Expense',
+                                    style: TextStyle(
+                                      color: Brand.expense,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            LayoutBuilder(
+                              builder: (context, constraints) =>
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: SizedBox(
+                                      width: math.max(
+                                        constraints.maxWidth,
+                                        7 *
+                                            (total.income > BigInt.zero &&
+                                                    total.expense > BigInt.zero
+                                                ? 88.0
+                                                : 48.0),
+                                      ),
+                                      height:
+                                          138 +
+                                          MediaQuery.textScalerOf(
+                                            context,
+                                          ).scale(34),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          for (var i = 0; i < 7; i++)
+                                            Expanded(
+                                              child: _Bar(
+                                                date: days[i],
+                                                income: per[i].income,
+                                                expense: per[i].expense,
+                                                maximum: maximum,
+                                                money: money,
+                                                isToday: sameDay(
+                                                  days[i],
+                                                  today,
+                                                ),
+                                                onTap: () => showDayPage(
+                                                  context,
+                                                  days[i],
+                                                  options: _view,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      GlassCard(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        child: Column(
+                          children: [
+                            for (var i = 0; i < 7; i++)
+                              InkWell(
+                                borderRadius: BorderRadius.circular(
+                                  Brand.controlRadius,
+                                ),
+                                onTap: () => showDayPage(
+                                  context,
+                                  days[i],
+                                  options: _view,
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                    horizontal: 4,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 64,
+                                        child: Text(
+                                          '${fmtWeekday(days[i]).substring(0, 3)} ${days[i].day}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            color: sameDay(days[i], today)
+                                                ? context.cs.primary
+                                                : null,
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          per[i].income > BigInt.zero
+                                              ? '+${money.full(per[i].income)}'
+                                              : '',
+                                          style: const TextStyle(
+                                            color: Brand.income,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 12.5,
+                                          ),
+                                        ),
+                                      ),
+                                      if (_view.type != TxType.income)
+                                        Text(
+                                          per[i].expense > BigInt.zero
+                                              ? money.full(per[i].expense)
+                                              : '—',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            color: per[i].expense > BigInt.zero
+                                                ? Brand.expense
+                                                : context.cs.onSurfaceVariant,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                ),
-              ],
-            ),
           ),
         ],
       ),

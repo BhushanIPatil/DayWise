@@ -110,6 +110,128 @@ void main() {
     ),
   );
 
+  testWidgets('day page filters accounts, type and search and scopes exports', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final day = DateTime(DateTime.now().year, DateTime.now().month, 10);
+    await state.addTxn(
+      Txn(
+        date: day,
+        amountMinor: 10000,
+        type: TxType.income,
+        accountId: 'bank',
+        note: 'Salary',
+        createdAt: 4,
+      ),
+    );
+    await tester.pumpWidget(app(DayPage(initial: day)));
+    await tester.pumpAndSettle();
+    List<Txn> visible() =>
+        tester.widget<TransactionList>(find.byType(TransactionList)).entries;
+    expect(visible(), hasLength(3));
+    expect(find.byType(SliverPersistentHeader), findsNothing);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('day-heading'))).data,
+      equals('${fmtWeekday(day)}, ${fmtDayLong(day)}'),
+    );
+    expect(
+      tester.getCenter(find.byType(BackButton)).dy,
+      tester.getCenter(find.byTooltip('Search')).dy,
+    );
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('day-heading'))).dy,
+      tester.getCenter(find.byTooltip('Record type')).dy,
+    );
+    await tester.tap(find.byTooltip('Record type'));
+    await tester.pumpAndSettle();
+    expect(find.text('Date ascending'), findsNothing);
+    expect(find.text('Date descending'), findsNothing);
+    expect(
+      find.byType(CheckedPopupMenuItem<RecordSortChoice>),
+      findsNWidgets(3),
+    );
+    final both = find.byWidgetPredicate(
+      (w) =>
+          w is CheckedPopupMenuItem<RecordSortChoice> &&
+          w.value == RecordSortChoice.both,
+    );
+    expect(
+      tester.widget<CheckedPopupMenuItem<RecordSortChoice>>(both).checked,
+      isTrue,
+    );
+    await tester.tap(
+      find.byWidgetPredicate(
+        (w) =>
+            w is CheckedPopupMenuItem<RecordSortChoice> &&
+            w.value == RecordSortChoice.expense,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(visible(), hasLength(2));
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Savings').last);
+    await tester.pumpAndSettle();
+    expect(visible().single.note, 'Lunch');
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('record-search')),
+      'Salary',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Nothing recorded'), findsOneWidget);
+    await tester.tap(find.byTooltip('Close search'));
+    await tester.pumpAndSettle();
+    expect(visible().single.note, 'Lunch');
+    await tester.tap(find.byTooltip('Record type'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byWidgetPredicate(
+        (w) =>
+            w is CheckedPopupMenuItem<RecordSortChoice> &&
+            w.value == RecordSortChoice.income,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(visible().single.note, 'Salary');
+    await tester.tap(find.byTooltip('Record type'));
+    await tester.pumpAndSettle();
+    await tester.tap(both);
+    await tester.pumpAndSettle();
+    final export = tester.widget<ReportExport>(find.byType(ReportExport));
+    expect(
+      export.entries!.map((t) => t.note),
+      containsAll(['Lunch', 'Salary']),
+    );
+    expect(export.entries, hasLength(2));
+    expect(export.from, day);
+    expect(export.to, day);
+    await tester.tap(find.byTooltip('More options'));
+    await tester.pumpAndSettle();
+    for (final label in ['Save PDF', 'Share PDF', 'Save CSV', 'Share CSV']) {
+      expect(find.text(label), findsOneWidget);
+    }
+    expect(find.text('Manage accounts'), findsNothing);
+    await tester.tapAt(const Offset(5, 600));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Next day'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nothing recorded'), findsOneWidget);
+    expect(
+      tester.widget<ReportExport>(find.byType(ReportExport)).from,
+      addDays(day, 1),
+    );
+    await tester.tap(find.byTooltip('Previous day'));
+    await tester.pumpAndSettle();
+    expect(visible(), hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
+
   test('export range includes the end day and respects account selection', () {
     final date = DateTime(DateTime.now().year, DateTime.now().month, 10);
     expect(state.recordsInRange(date, date).length, 2);
@@ -125,7 +247,10 @@ void main() {
   });
 
   Future<void> chooseSort(WidgetTester tester, RecordSortChoice choice) async {
-    await tester.tap(find.byTooltip('Sort and record type'));
+    final sort = find.byTooltip('Sort and record type');
+    await tester.tap(
+      sort.evaluate().isNotEmpty ? sort : find.byTooltip('Record type'),
+    );
     await tester.pumpAndSettle();
     await tester.tap(
       find.byWidgetPredicate(
@@ -135,6 +260,101 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+  }
+
+  for (final weekly in [false, true]) {
+    testWidgets(
+      'calendar type filters default to both and scope content: weekly=$weekly',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 740);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final now = DateTime.now();
+        await state.addTxn(
+          Txn(
+            date: now,
+            amountMinor: 77000,
+            type: TxType.income,
+            note: 'Current income',
+            createdAt: 10,
+          ),
+        );
+        await state.addTxn(
+          Txn(
+            date: now,
+            amountMinor: 33000,
+            type: TxType.expense,
+            note: 'Current expense',
+            createdAt: 11,
+          ),
+        );
+        await tester.pumpWidget(
+          app(weekly ? const WeekPage() : const CalendarPage()),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Record type'));
+        await tester.pumpAndSettle();
+        final items = tester.widgetList<CheckedPopupMenuItem<RecordSortChoice>>(
+          find.byType(CheckedPopupMenuItem<RecordSortChoice>),
+        );
+        expect(items, hasLength(3));
+        expect(
+          items.singleWhere((item) => item.checked).value,
+          RecordSortChoice.both,
+        );
+        expect(find.text('Date ascending'), findsNothing);
+        expect(find.text('Date descending'), findsNothing);
+        await tester.tap(
+          find.byWidgetPredicate(
+            (w) =>
+                w is CheckedPopupMenuItem<RecordSortChoice> &&
+                w.value == RecordSortChoice.income,
+          ),
+        );
+        await tester.pumpAndSettle();
+        List<Txn> exported() =>
+            tester.widget<ReportExport>(find.byType(ReportExport)).entries!;
+        expect(exported(), isNotEmpty);
+        expect(exported().every((t) => t.isIncome), isTrue);
+        if (weekly) {
+          expect(find.text('Income this week'), findsOneWidget);
+          expect(
+            tester
+                .widgetList<ChartValueBar>(find.byType(ChartValueBar))
+                .where((bar) => bar.value > BigInt.zero)
+                .every((bar) => bar.color == Brand.income),
+            isTrue,
+          );
+          await tester.tap(find.text('Categories'));
+          await tester.pumpAndSettle();
+          expect(find.text('Expense by category'), findsNothing);
+          expect(find.text('Income by category'), findsOneWidget);
+        } else {
+          expect(find.text('Expense'), findsNothing);
+          await tester.tap(find.text(now.day.toString()).first);
+          await tester.pumpAndSettle();
+          expect(
+            tester
+                .widget<TransactionList>(find.byType(TransactionList))
+                .entries
+                .every((t) => t.isIncome),
+            isTrue,
+          );
+          expect(find.byType(SliverPersistentHeader), findsNothing);
+          expect(find.byKey(const ValueKey('day-heading')), findsOneWidget);
+          await tester.pageBack();
+          await tester.pumpAndSettle();
+        }
+        await chooseSort(tester, RecordSortChoice.expense);
+        expect(exported(), isNotEmpty);
+        expect(exported().every((t) => !t.isIncome), isTrue);
+        await chooseSort(tester, RecordSortChoice.both);
+        expect(exported().any((t) => t.isIncome), isTrue);
+        expect(exported().any((t) => !t.isIncome), isTrue);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets(
@@ -157,7 +377,11 @@ void main() {
         expect(search.dy, menu.dy);
         final secondary = tester.getCenter(
           find.byTooltip(
-            page is CalendarPage ? 'Switch to week' : 'Sort and record type',
+            page is CalendarPage
+                ? 'Switch to week'
+                : page is InsightsPage
+                ? 'Record type'
+                : 'Sort and record type',
           ),
         );
         expect(secondary.dy, greaterThan(search.dy));
@@ -268,11 +492,18 @@ void main() {
       tester.getTopLeft(firstBar).dx,
       lessThan(tester.getTopLeft(lastBar).dx),
     );
-    await chooseSort(tester, RecordSortChoice.descending);
-    expect(
-      tester.getTopLeft(firstBar).dx,
-      greaterThan(tester.getTopLeft(lastBar).dx),
+    await tester.tap(find.byTooltip('Record type'));
+    await tester.pumpAndSettle();
+    expect(find.text('Date ascending'), findsNothing);
+    expect(find.text('Date descending'), findsNothing);
+    await tester.tap(
+      find.byWidgetPredicate(
+        (w) =>
+            w is CheckedPopupMenuItem<RecordSortChoice> &&
+            w.value == RecordSortChoice.both,
+      ),
     );
+    await tester.pumpAndSettle();
     await chooseSort(tester, RecordSortChoice.income);
     expect(find.text('Spent'), findsNothing);
     expect(find.text('Saved'), findsNothing);
@@ -314,9 +545,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('legacy categories do not appear in screens or search', (
-    tester,
-  ) async {
+  testWidgets('categories appear in records and settings', (tester) async {
     await state.addTxn(
       Txn(
         date: DateTime.now(),
@@ -337,8 +566,16 @@ void main() {
     ]) {
       await tester.pumpWidget(app(page));
       await tester.pumpAndSettle();
-      expect(find.text('Categories'), findsNothing);
-      expect(find.text('Food & Dining'), findsNothing);
+      expect(
+        find.text('Categories'),
+        page is SettingsPage || page is WeekPage || page is InsightsPage
+            ? findsOneWidget
+            : findsNothing,
+      );
+      if (page is RecordsPage) {
+        expect(find.text('Food & Dining'), findsNothing);
+        expect(find.byIcon(Icons.restaurant_rounded), findsWidgets);
+      }
       expect(find.text('Where it went'), findsNothing);
       expect(find.text('Top categories'), findsNothing);
       if (page is RecordsPage) expect(find.byType(AccountBadge), findsWidgets);
@@ -997,7 +1234,8 @@ void main() {
     final back = tester.getCenter(find.byType(BackButton));
     final previous = tester.getCenter(find.byIcon(Icons.chevron_left_rounded));
     expect(back.dx, lessThan(previous.dx));
-    expect(back.dy, closeTo(previous.dy, 1));
+    expect(back.dy, lessThan(previous.dy));
+    expect(back.dy, closeTo(tester.getCenter(find.byTooltip('Search')).dy, 1));
     expect(find.byType(BottomSheet), findsNothing);
     await tester.pageBack();
     await tester.pumpAndSettle();

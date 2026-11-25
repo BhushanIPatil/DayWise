@@ -18,7 +18,7 @@ class RecurringRule {
     this.id,
     required this.type,
     required Object amountMinor,
-    this.categoryId = '',
+    this.categoryId = kDefaultCategoryId,
     this.accountId = kDefaultAccountId,
     this.timeMinutes = 0,
     this.note = '',
@@ -33,7 +33,7 @@ class RecurringRule {
   final TxType type;
   final Object _amountMinor;
   BigInt get amountMinor => readMinor(_amountMinor);
-  // Retained only to read and round-trip older databases and backups.
+
   final String categoryId;
   final String accountId;
   final int timeMinutes;

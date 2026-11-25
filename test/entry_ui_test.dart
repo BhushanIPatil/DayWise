@@ -93,7 +93,7 @@ void main() {
       await tester.tap(find.text('New entry'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Category'), findsNothing);
-      expect(find.text('Category'), findsNothing);
+      expect(find.text('Category'), findsOneWidget);
       final amount = find.byKey(const ValueKey('entry-amount'));
       expect(
         tester.widget<TextField>(amount).keyboardType,
@@ -118,7 +118,7 @@ void main() {
       await tester.tap(find.text('Save income'));
       await tester.pumpAndSettle();
       expect(db.entries.single.type, TxType.income);
-      expect(db.entries.single.categoryId, isEmpty);
+      expect(db.entries.single.categoryId, kDefaultCategoryId);
       expect(db.entries.single.accountId, 'bank');
       expect(db.entries.single.date, selected);
       expect(
@@ -131,7 +131,7 @@ void main() {
   );
 
   testWidgets(
-    'expense entry saves and legacy entries remain editable without categories',
+    'expense entry saves and unknown legacy categories fall back to Other',
     (tester) async {
       SharedPreferences.setMockInitialValues({});
       final db = _MemoryDb();
@@ -187,15 +187,13 @@ void main() {
         );
         expect(saved.amountMinor, BigInt.from(4200));
         expect(saved.type, TxType.expense);
-        expect(saved.categoryId, edit == null ? '' : legacy.categoryId);
+        expect(saved.categoryId, kDefaultCategoryId);
         expect(tester.takeException(), isNull);
       }
     },
   );
 
-  testWidgets('recurring entry saves without any category data', (
-    tester,
-  ) async {
+  testWidgets('recurring entry defaults to Other', (tester) async {
     tester.view.physicalSize = const Size(320, 740);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -243,7 +241,9 @@ void main() {
       lessThan(tester.getTopLeft(find.text('Expense')).dx),
     );
     expect(
-      tester.widget<TransactionTypeToggle>(find.byType(TransactionTypeToggle)).value,
+      tester
+          .widget<TransactionTypeToggle>(find.byType(TransactionTypeToggle))
+          .value,
       TxType.income,
     );
     expect(
@@ -253,7 +253,7 @@ void main() {
           .color,
       Brand.income,
     );
-    expect(find.text('Category'), findsNothing);
+    expect(find.text('Category'), findsOneWidget);
     expect(find.byType(ChoiceChip), findsNothing);
     await tester.ensureVisible(find.text('No end date'));
     await tester.tap(find.text('No end date'));
@@ -282,8 +282,8 @@ void main() {
     expect(state.rules.single.amountMinor, BigInt.from(5000));
     expect(state.rules.single.type, TxType.income);
     expect(state.rules.single.endDate, isNull);
-    expect(state.rules.single.categoryId, isEmpty);
-    expect(db.entries.single.categoryId, isEmpty);
+    expect(state.rules.single.categoryId, kDefaultCategoryId);
+    expect(db.entries.single.categoryId, kDefaultCategoryId);
     expect(tester.takeException(), isNull);
   });
 

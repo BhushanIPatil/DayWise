@@ -1,3 +1,4 @@
+import 'categories_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -209,6 +210,7 @@ class TransactionRecordDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final color = txn.isIncome ? Brand.income : Brand.expense;
+    final category = s.categoryById(txn.categoryId);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,15 +220,32 @@ class TransactionRecordDetails extends StatelessWidget {
           children: [
             Expanded(
               flex: 3,
-              child: Text(
-                txn.note.isEmpty
-                    ? (txn.isIncome ? 'Income' : 'Expense')
-                    : txn.note,
-                softWrap: true,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Icon(
+                      categoryIcons[category.icon] ?? categoryIcons['other'],
+                      color: Color(category.color),
+                      size: 18,
+                      semanticLabel: category.name,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      txn.note.isEmpty
+                          ? (txn.isIncome ? 'Income' : 'Expense')
+                          : txn.note,
+                      softWrap: true,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 12),

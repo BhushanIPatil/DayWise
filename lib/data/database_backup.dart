@@ -66,7 +66,7 @@ class DatabaseBackup {
       final st = settings.single;
       if (st['schema'] is! int ||
           (st['schema'] as int) > kBackupSchema ||
-          await db.getVersion() > 4) {
+          await db.getVersion() > 5) {
         throw const FormatException(
           'Please update DayWise to restore this backup.',
         );

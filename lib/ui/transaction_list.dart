@@ -14,10 +14,12 @@ class TransactionList extends StatelessWidget {
     required this.entries,
     this.header,
     this.bottomPadding = 24,
+    this.showDateHeaders = true,
   });
   final List<Txn> entries;
   final Widget? header;
   final double bottomPadding;
+  final bool showDateHeaders;
 
   @override
   Widget build(BuildContext context) {
@@ -63,14 +65,15 @@ class TransactionList extends StatelessWidget {
                 SliverMainAxisGroup(
                   key: ValueKey(group.key),
                   slivers: [
-                    SliverPersistentHeader(
-                      key: ValueKey('transaction-date-${group.key}'),
-                      pinned: true,
-                      delegate: _DateHeaderDelegate(
-                        date: group.value.first.date,
-                        extent: extent(group.value.first.date),
+                    if (showDateHeaders)
+                      SliverPersistentHeader(
+                        key: ValueKey('transaction-date-${group.key}'),
+                        pinned: true,
+                        delegate: _DateHeaderDelegate(
+                          date: group.value.first.date,
+                          extent: extent(group.value.first.date),
+                        ),
                       ),
-                    ),
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       sliver: SliverList.builder(

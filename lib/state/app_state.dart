@@ -215,6 +215,9 @@ class AppState extends ChangeNotifier {
       selectedAccountId = null;
     }
     _categories = await _db.categories();
+    if (!_categories.any((c) => c.id == kDefaultCategoryId)) {
+      _categories = [kDefaultCategory, ..._categories];
+    }
     _catIndex
       ..clear()
       ..addEntries(_categories.map((c) => MapEntry(c.id, c)));
@@ -340,6 +343,43 @@ class AppState extends ChangeNotifier {
     await _db.deleteTxn(t.id!);
     _txns = _txns.where((x) => x.id != t.id).toList();
     _reindex();
+    notifyListeners();
+  }
+
+  Category categoryById(String id) =>
+      _catIndex[id] ?? _catIndex[kDefaultCategoryId] ?? kDefaultCategory;
+
+  Future<void> saveCategory(Category category) async {
+    final name = category.name.trim();
+    if (name.isEmpty) throw ArgumentError('Give this category a name.');
+    if (category.id == kDefaultCategoryId && name != 'Other') {
+      throw ArgumentError('The default category must be named Other.');
+    }
+    if (_categories.any(
+      (c) =>
+          c.id != category.id &&
+          c.name.trim().toLowerCase() == name.toLowerCase(),
+    )) {
+      throw ArgumentError('A category with this name already exists.');
+    }
+    await _db.upsertCategory(
+      Category(
+        id: category.id,
+        name: name,
+        icon: category.icon,
+        color: category.color,
+        type: category.type,
+        builtin: category.id == kDefaultCategoryId,
+        sort: category.sort,
+      ),
+    );
+    await _reload();
+    notifyListeners();
+  }
+
+  Future<void> deleteCategory(String id) async {
+    await _db.deleteCategory(id);
+    await _reload();
     notifyListeners();
   }
 

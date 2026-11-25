@@ -9,6 +9,11 @@ class RecordViewOptions {
   bool ascending = false;
   TxType? type;
 
+  Totals filterTotals(Totals totals) => Totals(
+    type == TxType.expense ? 0 : totals.income,
+    type == TxType.income ? 0 : totals.expense,
+  );
+
   List<Txn> apply(Iterable<Txn> entries) {
     final result = entries
         .where((txn) => type == null || txn.type == type)
@@ -27,26 +32,30 @@ class RecordSortButton extends StatelessWidget {
     super.key,
     required this.options,
     required this.onChanged,
+    this.showDateSort = true,
   });
   final RecordViewOptions options;
   final VoidCallback onChanged;
+  final bool showDateSort;
 
   @override
   Widget build(BuildContext context) => PopupMenuButton<RecordSortChoice>(
-    tooltip: 'Sort and record type',
+    tooltip: showDateSort ? 'Sort and record type' : 'Record type',
     icon: const Icon(Icons.sort_rounded),
     itemBuilder: (_) => [
-      CheckedPopupMenuItem(
-        value: RecordSortChoice.ascending,
-        checked: options.ascending,
-        child: const Text('Date ascending'),
-      ),
-      CheckedPopupMenuItem(
-        value: RecordSortChoice.descending,
-        checked: !options.ascending,
-        child: const Text('Date descending'),
-      ),
-      const PopupMenuDivider(),
+      if (showDateSort) ...[
+        CheckedPopupMenuItem(
+          value: RecordSortChoice.ascending,
+          checked: options.ascending,
+          child: const Text('Date ascending'),
+        ),
+        CheckedPopupMenuItem(
+          value: RecordSortChoice.descending,
+          checked: !options.ascending,
+          child: const Text('Date descending'),
+        ),
+        const PopupMenuDivider(),
+      ],
       CheckedPopupMenuItem(
         value: RecordSortChoice.both,
         checked: options.type == null,

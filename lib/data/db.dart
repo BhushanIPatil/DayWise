@@ -28,11 +28,22 @@ class AppDb {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: 5,
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) await _createRecurring(db);
           if (oldVersion < 3) await _createAccounts(db);
           if (oldVersion < 4) await _migrateAmountsToText(db);
+          if (oldVersion < 5) {
+            await db.insert(
+              'categories',
+              kDefaultCategory.toMap(),
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+            await db.update('transactions', {
+              'category_id': kDefaultCategoryId,
+            });
+            await db.update('recurring', {'category_id': kDefaultCategoryId});
+          }
         },
         onCreate: (db, version) async {
           await db.execute('''
@@ -58,6 +69,7 @@ class AppDb {
           )''');
           await _createRecurring(db);
           await _createAccounts(db);
+          await db.insert('categories', kDefaultCategory.toMap());
         },
       ),
     );
@@ -287,11 +299,20 @@ class AppDb {
 
   Future<void> deleteCategory(String id) async {
     final db = await _database;
-    await db.delete(
-      'categories',
-      where: 'id = ? AND builtin = 0',
-      whereArgs: [id],
-    );
+    if (id == kDefaultCategoryId) {
+      throw StateError('Keep the default category Other.');
+    }
+    await db.transaction((tx) async {
+      for (final table in ['transactions', 'recurring']) {
+        await tx.update(
+          table,
+          {'category_id': kDefaultCategoryId},
+          where: 'category_id = ?',
+          whereArgs: [id],
+        );
+      }
+      await tx.delete('categories', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   // ---------------------------------------------------------------- recurring
@@ -385,6 +406,17 @@ class AppDb {
         b.insert('recurring', r.toMap(includeId: false));
       }
       await b.commit(noResult: true);
+      await tx.insert(
+        'categories',
+        kDefaultCategory.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+      for (final table in ['transactions', 'recurring']) {
+        await tx.rawUpdate(
+          'UPDATE $table SET category_id = ? WHERE category_id NOT IN (SELECT id FROM categories)',
+          [kDefaultCategoryId],
+        );
+      }
     });
   }
 }
