@@ -78,8 +78,23 @@ class ReportPeriod {
   DateFilter? filter = DateFilter.month;
   DateTimeRange? custom;
   int weekOffset = 0;
+  int dayOffset = 0;
+  int yearOffset = 0;
 
   void move(int offset) {
+    switch (filter) {
+      case DateFilter.today:
+        dayOffset += offset;
+        return;
+      case DateFilter.week:
+        weekOffset += offset;
+        return;
+      case DateFilter.year:
+        yearOffset += offset;
+        return;
+      default:
+        break;
+    }
     month = DateTime(month.year, month.month + offset);
     filter = null;
   }
@@ -90,14 +105,15 @@ class ReportPeriod {
       case DateFilter.all:
         return null;
       case DateFilter.today:
-        return DateTimeRange(start: now, end: now);
+        final day = addDays(now, dayOffset);
+        return DateTimeRange(start: day, end: day);
       case DateFilter.week:
         final start = addDays(startOfWeek(now, weekStart), weekOffset * 7);
         return DateTimeRange(start: start, end: addDays(start, 6));
       case DateFilter.year:
         return DateTimeRange(
-          start: DateTime(now.year),
-          end: DateTime(now.year, 12, 31),
+          start: DateTime(now.year + yearOffset),
+          end: DateTime(now.year + yearOffset, 12, 31),
         );
       case DateFilter.custom:
         return custom;
@@ -131,6 +147,12 @@ class ReportPeriodBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final range = period.range(AppScope.of(context).weekStart);
     final monthly = period.filter == null || period.filter == DateFilter.month;
+    final unit = switch (period.filter) {
+      DateFilter.today => 'day',
+      DateFilter.week => 'week',
+      DateFilter.year => 'year',
+      _ => null,
+    };
     String fullDate(DateTime date) => '${fmtShort(date)} ${date.year}';
     final label = range == null
         ? 'All dates'
@@ -163,14 +185,14 @@ class ReportPeriodBar extends StatelessWidget {
                     onChanged();
                   },
                 )
-              : period.filter == DateFilter.week
+              : unit != null
               ? Row(
                   children: [
                     IconButton(
-                      tooltip: 'Previous week',
+                      tooltip: 'Previous $unit',
                       icon: const Icon(Icons.chevron_left_rounded, size: 30),
                       onPressed: () {
-                        period.weekOffset--;
+                        period.move(-1);
                         onChanged();
                       },
                     ),
@@ -180,17 +202,14 @@ class ReportPeriodBar extends StatelessWidget {
                         key: const ValueKey('report-date-range'),
                         textAlign: TextAlign.center,
                         maxLines: 2,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: periodLabelStyle,
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Next week',
+                      tooltip: 'Next $unit',
                       icon: const Icon(Icons.chevron_right_rounded, size: 30),
                       onPressed: () {
-                        period.weekOffset++;
+                        period.move(1);
                         onChanged();
                       },
                     ),
@@ -205,10 +224,7 @@ class ReportPeriodBar extends StatelessWidget {
                     label,
                     key: const ValueKey('report-date-range'),
                     maxLines: 2,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: periodLabelStyle,
                   ),
                 ),
         ),
@@ -245,6 +261,8 @@ class ReportPeriodBar extends StatelessWidget {
             }
             period.filter = filter;
             period.weekOffset = 0;
+            period.dayOffset = 0;
+            period.yearOffset = 0;
             onChanged();
           },
         ),

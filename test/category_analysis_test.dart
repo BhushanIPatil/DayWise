@@ -177,6 +177,26 @@ void main() {
           state.money.full(40000),
         );
         final row = find.byKey(const ValueKey('category-row-expense-food'));
+        final incomeRow = find.byKey(
+          const ValueKey('category-row-income-food'),
+        );
+        expect(find.text('By category'), findsOneWidget);
+        expect(find.text('Food'), findsOneWidget);
+        expect(
+          tester.getTopLeft(incomeRow).dy,
+          lessThan(tester.getTopLeft(row).dy),
+        );
+        expect(
+          tester
+              .widget<LinearProgressIndicator>(
+                find.descendant(
+                  of: incomeRow,
+                  matching: find.byType(LinearProgressIndicator),
+                ),
+              )
+              .value,
+          0.25,
+        );
         expect(
           tester
               .widget<LinearProgressIndicator>(
@@ -236,7 +256,15 @@ void main() {
           );
           await tester.pumpAndSettle();
           expect(find.text('Expense by category'), findsNothing);
-          expect(find.text('Income by category'), findsOneWidget);
+          expect(find.text('By category'), findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('category-total-expense')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const ValueKey('category-total-income')),
+            findsOneWidget,
+          );
           await tester.tap(find.byTooltip('Search'));
           await tester.pumpAndSettle();
           await tester.enterText(

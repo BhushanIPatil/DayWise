@@ -69,124 +69,209 @@ class CategoryAnalysis extends StatelessWidget {
         ),
       );
     }
+    final types = [
+      if (type == null || type == TxType.income) TxType.income,
+      if (type == null || type == TxType.expense) TxType.expense,
+    ];
+    final rows = {
+      for (final t in types) t: categoryTotals(entries, t, state.categoryById),
+    };
+    final totals = {
+      for (final t in types)
+        t: rows[t]!.fold<BigInt>(
+          BigInt.zero,
+          (sum, row) => sum + row.amountMinor,
+        ),
+    };
+    final categories = <String, Category>{};
+    final amounts = <String, BigInt>{};
+    for (final group in rows.values) {
+      for (final row in group) {
+        categories[row.category.id] = row.category;
+        amounts[row.category.id] =
+            (amounts[row.category.id] ?? BigInt.zero) + row.amountMinor;
+      }
+    }
+    final ordered = categories.values.toList()
+      ..sort((a, b) {
+        final amount = amounts[b.id]!.compareTo(amounts[a.id]!);
+        return amount != 0 ? amount : a.name.compareTo(b.name);
+      });
+    final byCategory = {
+      for (final t in types)
+        t: {for (final row in rows[t]!) row.category.id: row},
+    };
     return ListView(
       key: const PageStorageKey('category-analysis'),
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       children: [
-        for (final groupType in [TxType.expense, TxType.income])
-          if (type == null || type == groupType)
-            _section(context, state, groupType),
-      ],
-    );
-  }
-
-  Widget _section(BuildContext context, AppState state, TxType groupType) {
-    final rows = categoryTotals(entries, groupType, state.categoryById);
-    final total = rows.fold<BigInt>(
-      BigInt.zero,
-      (sum, row) => sum + row.amountMinor,
-    );
-    final label = groupType == TxType.income ? 'Income' : 'Expense';
-    return GlassCard(
-      key: ValueKey('category-section-${groupType.name}'),
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$label by category',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            state.money.full(total),
-            key: ValueKey('category-total-${groupType.name}'),
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: groupType == TxType.income ? Brand.income : Brand.expense,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Percentages of total ${label.toLowerCase()}',
-            style: TextStyle(fontSize: 12, color: context.cs.onSurfaceVariant),
-          ),
-          if (rows.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text('No ${label.toLowerCase()} records in this period.'),
-            ),
-          for (final row in rows)
-            InkWell(
-              key: ValueKey(
-                'category-row-${groupType.name}-${row.category.id}',
-              ),
-              borderRadius: BorderRadius.circular(Brand.controlRadius),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => _CategoryRecords(
-                    categoryId: row.category.id,
-                    type: groupType,
-                    from: from,
-                    to: to,
-                    query: query,
-                  ),
+        GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                type == null ? 'Income and expense' : _label(type!),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          categoryIcons[row.category.icon] ??
-                              categoryIcons['other'],
-                          size: 22,
-                          color: Color(row.category.color),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            row.category.name,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+              const SizedBox(height: 8),
+              for (final t in types)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Text(_label(t)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          state.money.full(totals[t]!),
+                          key: ValueKey('category-total-${t.name}'),
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: _color(t),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.chevron_right_rounded, size: 18),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      state.money.full(row.amountMinor),
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${(minorRatio(row.amountMinor, total) * 100).toStringAsFixed(1)}% · ${row.count} ${row.count == 1 ? 'transaction' : 'transactions'}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.cs.onSurfaceVariant,
                       ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'By category',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Percentages of total income or expense',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.cs.onSurfaceVariant,
+                ),
+              ),
+              for (final category in ordered) ...[
+                if (category == ordered.first)
+                  const SizedBox(height: 16)
+                else
+                  Divider(height: 28, color: context.cs.outlineVariant),
+                Row(
+                  children: [
+                    Icon(
+                      categoryIcons[category.icon] ?? categoryIcons['other'],
+                      size: 22,
+                      color: Color(category.color),
                     ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: minorRatio(row.amountMinor, total),
-                        minHeight: 7,
-                        color: Color(row.category.color),
-                        backgroundColor: context.softFill,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        category.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
                   ],
                 ),
+                for (final t in types)
+                  _bar(
+                    context,
+                    state,
+                    category,
+                    t,
+                    byCategory[t]![category.id],
+                    totals[t]!,
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _label(TxType type) => type == TxType.income ? 'Income' : 'Expense';
+  Color _color(TxType type) =>
+      type == TxType.income ? Brand.income : Brand.expense;
+
+  Widget _bar(
+    BuildContext context,
+    AppState state,
+    Category category,
+    TxType groupType,
+    CategoryTotal? row,
+    BigInt total,
+  ) {
+    final amount = row?.amountMinor ?? BigInt.zero;
+    final count = row?.count ?? 0;
+    return InkWell(
+      key: ValueKey('category-row-${groupType.name}-${category.id}'),
+      borderRadius: BorderRadius.circular(Brand.controlRadius),
+      onTap: count == 0
+          ? null
+          : () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => _CategoryRecords(
+                  categoryId: category.id,
+                  type: groupType,
+                  from: from,
+                  to: to,
+                  query: query,
+                ),
               ),
             ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  _label(groupType),
+                  style: TextStyle(color: _color(groupType)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    state.money.full(amount),
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (count > 0)
+                  const Icon(Icons.chevron_right_rounded, size: 18),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${(minorRatio(amount, total) * 100).toStringAsFixed(1)}% · $count ${count == 1 ? 'transaction' : 'transactions'}',
+              style: TextStyle(
+                fontSize: 12,
+                color: context.cs.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: minorRatio(amount, total),
+                minHeight: 7,
+                color: _color(groupType),
+                backgroundColor: context.softFill,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -424,6 +424,8 @@ class EmptyState extends StatelessWidget {
 }
 
 /// "‹  October 2026  ›" selector used by the week and insights pages.
+const periodLabelStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w800);
+
 class PeriodNavigator extends StatelessWidget {
   const PeriodNavigator({
     super.key,
@@ -453,30 +455,11 @@ class PeriodNavigator extends StatelessWidget {
             borderRadius: BorderRadius.circular(Brand.controlRadius),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(width: 6),
-                      Text(
-                        subtitle!,
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: context.cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+              child: Text(
+                subtitle == null ? title : '$title $subtitle',
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: periodLabelStyle,
               ),
             ),
           ),

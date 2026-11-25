@@ -329,7 +329,15 @@ void main() {
           await tester.tap(find.text('Categories'));
           await tester.pumpAndSettle();
           expect(find.text('Expense by category'), findsNothing);
-          expect(find.text('Income by category'), findsOneWidget);
+          expect(find.text('By category'), findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('category-total-income')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('category-total-expense')),
+            findsNothing,
+          );
         } else {
           expect(find.text('Expense'), findsNothing);
           await tester.tap(find.text(now.day.toString()).first);
@@ -966,7 +974,9 @@ void main() {
           find
               .descendant(
                 of: find.byType(PeriodNavigator),
-                matching: find.text(fmtMonth(DateTime.now())),
+                matching: find.text(
+                  '${fmtMonth(DateTime.now())} ${DateTime.now().year}',
+                ),
               )
               .first,
         );
@@ -1123,62 +1133,87 @@ void main() {
     },
   );
 
-  testWidgets('list and insights browse weeks and reset to the current week', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(320, 640);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final start = startOfWeek(DateTime.now(), state.weekStart);
-    Future<void> selectWeek() async {
-      await tester.tap(find.byIcon(Icons.filter_alt_rounded));
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget is CheckedPopupMenuItem<DateFilter> &&
-              widget.value == DateFilter.week,
+  for (final filter in [DateFilter.today, DateFilter.week, DateFilter.year]) {
+    testWidgets('list and insights browse and reset ${filter.name}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final now = dateOnly(DateTime.now());
+      final unit = filter == DateFilter.today
+          ? 'day'
+          : filter == DateFilter.week
+          ? 'week'
+          : 'year';
+      DateTime startAt(int offset) => switch (filter) {
+        DateFilter.today => addDays(now, offset),
+        DateFilter.week => addDays(
+          startOfWeek(now, state.weekStart),
+          offset * 7,
         ),
-      );
-      await tester.pumpAndSettle();
-    }
+        _ => DateTime(now.year + offset),
+      };
+      DateTime endAt(int offset) => switch (filter) {
+        DateFilter.today => startAt(offset),
+        DateFilter.week => addDays(startAt(offset), 6),
+        _ => DateTime(now.year + offset, 12, 31),
+      };
+      final start = startAt(0);
+      Future<void> selectPeriod() async {
+        await tester.tap(find.byIcon(Icons.filter_alt_rounded));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is CheckedPopupMenuItem<DateFilter> &&
+                widget.value == filter,
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
 
-    for (final page in [const RecordsPage(), const InsightsPage()]) {
-      await tester.pumpWidget(app(page));
-      await tester.pumpAndSettle();
-      await selectWeek();
-      expect(
-        tester.widget<ReportExport>(find.byType(ReportExport)).from,
-        start,
-      );
-      await tester.tap(find.byTooltip('Previous week'));
-      await tester.pumpAndSettle();
-      final previous = tester.widget<ReportExport>(find.byType(ReportExport));
-      expect(previous.from, addDays(start, -7));
-      expect(previous.to, addDays(start, -1));
-      expect(
-        tester
-            .widget<Text>(find.byKey(const ValueKey('report-date-range')))
-            .data,
-        contains(fmtShort(addDays(start, -7))),
-      );
-      await tester.tap(find.byTooltip('Next week'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Next week'));
-      await tester.pumpAndSettle();
-      expect(
-        tester.widget<ReportExport>(find.byType(ReportExport)).from,
-        addDays(start, 7),
-      );
-      await selectWeek();
-      expect(
-        tester.widget<ReportExport>(find.byType(ReportExport)).from,
-        start,
-      );
-      expect(tester.takeException(), isNull);
-    }
-  });
+      for (final page in [const RecordsPage(), const InsightsPage()]) {
+        await tester.pumpWidget(app(page));
+        await tester.pumpAndSettle();
+        await selectPeriod();
+        expect(
+          tester.widget<ReportExport>(find.byType(ReportExport)).from,
+          start,
+        );
+        await tester.tap(find.byTooltip('Previous $unit'));
+        await tester.pumpAndSettle();
+        final previous = tester.widget<ReportExport>(find.byType(ReportExport));
+        expect(previous.from, startAt(-1));
+        expect(previous.to, endAt(-1));
+        expect(
+          tester
+              .widget<Text>(find.byKey(const ValueKey('report-date-range')))
+              .data,
+          contains(fmtShort(startAt(-1))),
+        );
+        await tester.tap(find.byTooltip('Next $unit'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Next $unit'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<ReportExport>(find.byType(ReportExport)).from,
+          startAt(1),
+        );
+        expect(
+          tester.widget<ReportExport>(find.byType(ReportExport)).to,
+          endAt(1),
+        );
+        await selectPeriod();
+        expect(
+          tester.widget<ReportExport>(find.byType(ReportExport)).from,
+          start,
+        );
+        expect(tester.takeException(), isNull);
+      }
+    });
+  }
 
   testWidgets(
     'monthly remaining is the same before and after a recorded expense',
@@ -1341,6 +1376,32 @@ void main() {
     expect(find.text('AM'), findsOneWidget);
     expect(find.text('PM'), findsOneWidget);
   });
+
+  testWidgets(
+    'week search filters the selected account and closes back to the overview',
+    (tester) async {
+      await tester.pumpWidget(app(const WeekPage()));
+      final overview = find.byKey(
+        ValueKey(
+          'week-day-${dateKey(startOfWeek(DateTime.now(), state.weekStart))}',
+        ),
+      );
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      expect(overview, findsOneWidget);
+      final input = find.byKey(const ValueKey('record-search'));
+      await tester.enterText(input, 'Lunch');
+      await tester.pump();
+      expect(find.byType(EntryTile), findsOneWidget);
+      state.selectAccount(kDefaultAccountId);
+      await tester.pump();
+      expect(find.text('No matches'), findsOneWidget);
+      await tester.tap(find.byTooltip('Close search'));
+      await tester.pumpAndSettle();
+      expect(input, findsNothing);
+      expect(overview, findsOneWidget);
+    },
+  );
 
   testWidgets(
     'calendar search keeps content visible and filters the selected account',

@@ -6,6 +6,7 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
 import 'record_view_options.dart';
+import 'record_search.dart';
 import '../state/app_state.dart';
 import 'day_page.dart';
 import 'widgets.dart';
@@ -27,6 +28,15 @@ class _WeekPageState extends State<WeekPage> {
   DateTime _anchor = dateOnly(DateTime.now());
   AnalysisView _analysisView = AnalysisView.overview;
   final _view = RecordViewOptions();
+  final _searchController = TextEditingController();
+  bool _searching = false;
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,16 +69,19 @@ class _WeekPageState extends State<WeekPage> {
       deltaText = 'Nothing spent last week';
     }
 
-    final sameMonth = start.month == end.month;
-    final title = sameMonth
-        ? '${start.day} – ${end.day} ${fmtMonth(end).substring(0, 3)}'
-        : '${fmtShort(start)} – ${fmtShort(end)}';
+    final title =
+        '${fmtShort(start)}${start.year == end.year ? '' : ' ${start.year}'} – ${fmtShort(end)} ${end.year}';
 
     return SafeArea(
       bottom: false,
       child: Column(
         children: [
           AccountSwitcher(
+            viewToggle: IconButton(
+              tooltip: 'Search',
+              onPressed: () => setState(() => _searching = true),
+              icon: const Icon(Icons.search_rounded),
+            ),
             actions: ReportExport(
               includeAccounts: true,
               title: 'Week',
@@ -82,7 +95,6 @@ class _WeekPageState extends State<WeekPage> {
               Expanded(
                 child: PeriodNavigator(
                   title: title,
-                  subtitle: '${end.year}',
                   onPrev: () => setState(() => _anchor = addDays(_anchor, -7)),
                   onNext: () => setState(() => _anchor = addDays(_anchor, 7)),
                 ),
@@ -99,12 +111,27 @@ class _WeekPageState extends State<WeekPage> {
               ),
             ],
           ),
+          if (_searching)
+            InlineRecordSearch(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _query = value),
+              onClose: () {
+                FocusScope.of(context).unfocus();
+                _searchController.clear();
+                setState(() {
+                  _searching = false;
+                  _query = '';
+                });
+              },
+            ),
           AnalysisViewToggle(
             value: _analysisView,
             onChanged: (view) => setState(() => _analysisView = view),
           ),
           Expanded(
-            child: _analysisView == AnalysisView.categories
+            child: _query.trim().isNotEmpty
+                ? RecordSearchResults(query: _query, options: _view)
+                : _analysisView == AnalysisView.categories
                 ? CategoryAnalysis(
                     entries: _view.apply(s.recordsInRange(start, end)),
                     type: _view.type,
